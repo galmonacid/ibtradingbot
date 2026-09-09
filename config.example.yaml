@@ -3,13 +3,28 @@ project:
   timezone: Europe/London
   base_currency: GBP
 
+calendar:
+  exchange: XNYS
+  version: xnys-fixture-v1
+
+corporate_actions:
+  version: actions-fixture-v1
+
 universe:
-  source: fixed_seed_then_dynamic
+  source: fixed_seed
+  version: seed-v1
   benchmark: SPY
   max_symbols: 50
   min_price_usd: 10
   min_median_dollar_volume_20d: 500000000
+  min_history_sessions: 252
   require_primary_listing_us: true
+
+data_quality:
+  suspicious_adjusted_move: 0.50
+  stale_adjusted_price_sessions: 5
+  likely_split_min_ratio: 1.80
+  likely_split_adjusted_tolerance: 0.10
 
 strategy:
   rebalance_frequency: weekly
@@ -29,6 +44,10 @@ strategy:
     sma_medium: 100
     sma_slow: 200
     require_price_above_sma200: true
+
+  ranking:
+    momentum_weight: 0.65
+    trend_weight: 0.30
 
   penalties:
     volatility_weight: 0.20

@@ -1,0 +1,26 @@
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Runtime data and artifacts (the checked-in fixture is intentionally retained).
+data/raw/
+data/processed/
+data/metadata/
+reports/
+artifacts/
+logs/
+*.parquet
+*.duckdb
+*.sqlite*
+
+# Credentials and local configuration.
+.env
+.env.*
+!config.example.yaml
+config/*.local.yaml

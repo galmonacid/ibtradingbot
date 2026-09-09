@@ -72,7 +72,11 @@ At minimum:
 - Paper-trading behavior matches simulated behavior
 - Live risk controls are tested independently
 
-## Suggested initial command flow
+## Future roadmap command shape
+
+The following illustrates the intended later-stage module boundaries. These
+commands are not implemented in Phase 0 or Phase 1; use the supported commands
+below instead.
 
 ```bash
 python -m src.data.download
@@ -81,6 +85,76 @@ python -m src.backtest.run --config config.example.yaml
 python -m src.validation.walk_forward --config config.example.yaml
 python -m src.paper.run
 ```
+
+## Phase 0 bootstrap
+
+Phase 0 intentionally provides only safe local validation infrastructure. It
+does not download data, generate signals, run a backtest, contact Interactive
+Brokers, or place an order.
+
+With Python 3.12 or newer, install the project and its development tools:
+
+```bash
+python -m pip install -e ".[dev]"
+```
+
+Run the version-controlled sample fixture pipeline:
+
+```bash
+momentum-sample-pipeline --config config.example.yaml
+```
+
+Equivalent module command:
+
+```bash
+python -m src.cli.sample_pipeline --config config.example.yaml
+```
+
+The command validates the YAML safety envelope and the local sample daily-bar
+CSV, writes a JSON summary to standard output, and writes structured JSON logs
+to standard error. The fixture is for engineering validation only; it cannot
+be used to make performance or investment claims.
+
+Quality checks:
+
+```bash
+pytest
+ruff check .
+mypy src
+python -m build
+```
+
+## Phase 1 deterministic research baseline
+
+Phase 1 is a local, deterministic engineering baseline. It ingests canonical
+daily OHLCV data, applies versioned fixed-universe eligibility rules, builds the
+required trailing features, ranks trend-eligible stocks, classifies the market
+regime, constructs equal-weight targets, and simulates the next available
+session's adjusted open with commission, slippage, and FX friction.
+
+Run the checked-in synthetic fixture:
+
+```bash
+momentum-research-pipeline \
+  --config config.example.yaml \
+  --data data/sample/research_daily_bars.csv \
+  --universe data/sample/seed_universe.csv \
+  --calendar data/sample/us_sessions.csv \
+  --corporate-actions data/sample/corporate_actions.csv
+```
+
+The command prints one JSON report containing provenance, weekly decisions,
+executed trades, daily equity, costs, all required performance metrics, SPY and
+cash references, and benchmark-relative metrics. It performs no download,
+broker connection, or order submission. Supply a timezone-aware
+`--run-timestamp` to make the complete report byte-reproducible for regression
+checks; without it, economic outputs are deterministic but the recorded run
+time changes.
+
+The fixture is synthetic and the seed universe is not point-in-time. Its output
+is strictly for engineering validation—not a historical performance claim,
+financial advice, or evidence of readiness for paper or live trading. See
+`docs/PHASE1_BASELINE.md` for exact conventions and deferred scope.
 
 ## Non-goals for V1
 

@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "momentum-ml-bot"
+version = "0.1.0"
+description = "Deterministic research baseline for a long-only momentum trading system."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = ["PyYAML>=6.0.2"]
+
+[project.optional-dependencies]
+dev = [
+  "build>=1.2",
+  "mypy>=1.13",
+  "pytest>=8.3",
+  "ruff>=0.8",
+  "types-PyYAML>=6.0.12",
+]
+
+[project.scripts]
+momentum-sample-pipeline = "src.cli.sample_pipeline:main"
+momentum-research-pipeline = "src.cli.research_pipeline:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src"]
+strict = true
+warn_unreachable = true
