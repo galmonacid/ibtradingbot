@@ -34,7 +34,7 @@ def _series(symbol: str, multiplier: float, count: int = 270) -> list[Bar]:
     start = date(2023, 1, 1)
     bars = []
     for index in range(count):
-        adjusted = 100.0 * multiplier ** index
+        adjusted = 100.0 * multiplier**index
         bars.append(
             Bar(
                 start + timedelta(days=index),
@@ -64,9 +64,7 @@ def test_required_features_have_exact_trailing_values() -> None:
     assert aaa.values["ret_21d"] == pytest.approx(1.01**21 - 1.0)
     assert aaa.values["ret_63_skip5"] == pytest.approx(1.01**63 - 1.0)
     assert aaa.values["ret_252_skip5"] == pytest.approx(1.01**252 - 1.0)
-    assert aaa.values["relative_ret_63d"] == pytest.approx(
-        (1.01**63 - 1.0) - (1.002**63 - 1.0)
-    )
+    assert aaa.values["relative_ret_63d"] == pytest.approx((1.01**63 - 1.0) - (1.002**63 - 1.0))
     assert aaa.values["trend_200d"] is not None
     assert aaa.values["median_dollar_volume_20d"] is not None
     assert aaa.values["breadth_above_sma200"] == pytest.approx(0.5)
@@ -209,9 +207,7 @@ def test_regime_uses_prior_only_percentile_and_exact_boundaries() -> None:
     equal_threshold = _regime_row(start + timedelta(days=2), 0.1)
     risk_on = _regime_row(start + timedelta(days=3), 0.09)
     risk_off = _regime_row(start + timedelta(days=4), 0.3, trend=0.0, breadth=0.44)
-    boundary_neutral = _regime_row(
-        start + timedelta(days=5), 0.1, trend=0.0, breadth=0.45
-    )
+    boundary_neutral = _regime_row(start + timedelta(days=5), 0.1, trend=0.0, breadth=0.45)
     parameters = RegimeParameters(min_vol_history=2)
 
     prefix = classify_regimes(history + [equal_threshold, risk_on], parameters=parameters)

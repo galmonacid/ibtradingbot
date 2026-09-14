@@ -82,14 +82,10 @@ def classify_regimes(
         breadth_number = None if breadth_value is None else float(breadth_value)
         volatility_number = None if volatility_value is None else float(volatility_value)
         trend = (
-            None
-            if trend_number is None or not math.isfinite(trend_number)
-            else trend_number > 0.0
+            None if trend_number is None or not math.isfinite(trend_number) else trend_number > 0.0
         )
         breadth = (
-            None
-            if breadth_number is None or not math.isfinite(breadth_number)
-            else breadth_number
+            None if breadth_number is None or not math.isfinite(breadth_number) else breadth_number
         )
         volatility = (
             None
@@ -124,9 +120,7 @@ def classify_regimes(
             elif not trend and breadth < params.neutral_breadth:
                 regime = Regime.RISK_OFF
 
-        output.append(
-            RegimeRow(row.date, regime, trend, breadth, volatility, threshold)
-        )
+        output.append(RegimeRow(row.date, regime, trend, breadth, volatility, threshold))
         if volatility is not None and math.isfinite(volatility):
             prior_volatility.append(volatility)
     return tuple(output)

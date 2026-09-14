@@ -26,6 +26,29 @@ delistings
 
 The research pipeline should use adjusted historical prices where appropriate, while the execution engine must use live/raw tradable prices.
 
+### Initial historical-data stack
+
+Phase 3 uses `chinobing/historical_sp500_constituents` as the primary dated S&P 500 membership
+source from 1996, `unliftedq/index-constitution` for ticker-change and delisting events, and
+Tiingo for raw and adjusted daily OHLCV, dividends, and splits. `riazarbi/sp500-scraper` and
+historical SPY holdings are independent membership-QA sources. This is the initial point-in-time
+route; CRSP/WRDS is not required for initial research validation. It must nevertheless meet the
+point-in-time, identity, coverage, reconciliation, and audit requirements in
+`PHASE3_HISTORICAL_VALIDATION.md` before it is used as deployment evidence.
+
+The primary membership snapshots establish membership intervals. The index-constitution event
+history establishes dated security identity, ticker successor, and delisting treatment. Tiingo
+establishes prices and corporate-action inputs. Store immutable, commit-pinned source snapshots
+separately from canonical Parquet output, including repository URL, commit SHA, retrieval timestamp,
+file hashes, transformation version, source licences, request parameters, and all failed requests.
+Do not replace old snapshots or extracts in place.
+
+FMP Basic is a supplemental validation source: use `historical-price-eod/full` for independent
+raw-OHLCV/last-bar checks, `dividends` for action checks, and `delisted-companies` for delisting
+checks. `profile`, `search-symbol`, `quote`, and `historical-market-capitalization` may enrich or
+sanity-check the security master. These responses must never backfill Tiingo, override the pinned
+membership/identity sources, or project current metadata into historical eligibility.
+
 ---
 
 ## 2. Point-in-time requirements
@@ -217,13 +240,29 @@ Recommended local format:
 ```text
 data/
 ├── raw/
-│   ├── prices/
-│   └── corporate_actions/
+│   ├── historical_sp500_constituents/
+│   │   └── membership_snapshots/
+│   ├── index_constitution/
+│   │   ├── ticker_changes/
+│   │   └── delistings/
+│   ├── membership_qa/
+│   │   ├── sp500_scraper/
+│   │   └── spy_holdings/
+│   ├── fmp_validation/
+│   │   ├── prices/
+│   │   ├── dividends/
+│   │   ├── delistings/
+│   │   └── security_metadata/
+│   └── tiingo/
+│       ├── prices/
+│       └── corporate_actions/
 ├── processed/
 │   ├── daily_bars.parquet
 │   ├── features.parquet
-│   └── universe.parquet
+│   ├── universe.parquet
+│   └── security_master.parquet
 └── metadata/
+    └── manifests/
 ```
 
 Preferred analytics store:
@@ -247,6 +286,9 @@ Every ingestion run must test:
 - missing volume
 - stale prices
 - split-related discontinuities
+- raw-versus-adjusted reconciliation around recorded splits and dividends
+- membership-interval gaps/overlaps and ticker-to-security identity conflicts
+- constituent-change audit discrepancies
 
 Example:
 

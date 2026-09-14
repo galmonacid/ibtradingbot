@@ -10,6 +10,7 @@ build/
 
 # Runtime data and artifacts (the checked-in fixture is intentionally retained).
 data/raw/
+data/local/
 data/processed/
 data/metadata/
 reports/

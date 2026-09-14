@@ -82,9 +82,7 @@ def test_ingestion_quarantines_temporal_anomalies(tmp_path: Path) -> None:
         "2024-01-01,NVDA,100,100,100,100,100,6000000",
         "2024-01-02,NVDA,170,170,170,170,170,6000000",
     ]
-    rows.extend(
-        f"2024-01-{day:02d},MSFT,100,100,100,100,100,6000000" for day in range(1, 6)
-    )
+    rows.extend(f"2024-01-{day:02d},MSFT,100,100,100,100,100,6000000" for day in range(1, 6))
     _write_csv(path, rows)
 
     result = ingest_daily_bars(path, config)
@@ -113,10 +111,7 @@ def test_stale_detection_is_prefix_causal_and_unadjusted_split_is_quarantined(
     tmp_path: Path,
 ) -> None:
     config = load_config(ROOT / "config.example.yaml")
-    four = [
-        f"2024-01-{day:02d},AAA,100,100,100,100,100,6000000"
-        for day in range(1, 5)
-    ]
+    four = [f"2024-01-{day:02d},AAA,100,100,100,100,100,6000000" for day in range(1, 5)]
     prefix = tmp_path / "prefix.csv"
     extended = tmp_path / "extended.csv"
     _write_csv(prefix, four)

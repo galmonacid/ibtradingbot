@@ -50,9 +50,7 @@ class RankingParameters:
         if not all(math.isfinite(value) for value in numeric):
             raise ValueError("ranking parameters must be finite")
         if not math.isclose(
-            self.momentum_63_weight
-            + self.momentum_126_weight
-            + self.momentum_252_weight,
+            self.momentum_63_weight + self.momentum_126_weight + self.momentum_252_weight,
             1.0,
         ):
             raise ValueError("momentum horizon weights must sum to one")
@@ -105,21 +103,14 @@ def _zscores(
     concrete = list(values.values())
     lower = _percentile(concrete, lower_quantile)
     upper = _percentile(concrete, upper_quantile)
-    winsorized = {
-        symbol: min(max(value, lower), upper) for symbol, value in values.items()
-    }
+    winsorized = {symbol: min(max(value, lower), upper) for symbol, value in values.items()}
     mean = math.fsum(winsorized.values()) / len(winsorized)
-    variance = math.fsum((value - mean) ** 2 for value in winsorized.values()) / len(
-        winsorized
-    )
+    variance = math.fsum((value - mean) ** 2 for value in winsorized.values()) / len(winsorized)
     standard_deviation = math.sqrt(variance)
     scale = max(1.0, *(abs(value) for value in winsorized.values()))
     if standard_deviation <= 1e-15 * scale:
         return dict.fromkeys(winsorized, 0.0)
-    return {
-        symbol: (value - mean) / standard_deviation
-        for symbol, value in winsorized.items()
-    }
+    return {symbol: (value - mean) / standard_deviation for symbol, value in winsorized.items()}
 
 
 def _required_value(row: FeatureRow, feature: str) -> float:
@@ -155,9 +146,7 @@ def rank_features(
     for row in session_rows:
         missing = [name for name in MANDATORY_SCORE_FEATURES if row.values.get(name) is None]
         if missing:
-            exclusions.append(
-                RankingExclusion(row.symbol, "missing:" + ",".join(missing))
-            )
+            exclusions.append(RankingExclusion(row.symbol, "missing:" + ",".join(missing)))
             continue
         non_finite = [
             name
@@ -165,9 +154,7 @@ def rank_features(
             if not math.isfinite(_required_value(row, name))
         ]
         if non_finite:
-            exclusions.append(
-                RankingExclusion(row.symbol, "non_finite:" + ",".join(non_finite))
-            )
+            exclusions.append(RankingExclusion(row.symbol, "non_finite:" + ",".join(non_finite)))
             continue
         close = _required_value(row, "adjusted_close")
         sma200 = _required_value(row, "sma_200d")
@@ -196,10 +183,13 @@ def rank_features(
             + params.momentum_126_weight * transformed["ret_126_skip5"][symbol]
             + params.momentum_252_weight * transformed["ret_252_skip5"][symbol]
         )
-        trend = math.fsum(
-            transformed[feature][symbol]
-            for feature in ("trend_50d", "trend_100d", "trend_200d")
-        ) / 3.0
+        trend = (
+            math.fsum(
+                transformed[feature][symbol]
+                for feature in ("trend_50d", "trend_100d", "trend_200d")
+            )
+            / 3.0
+        )
         scores[symbol] = (
             params.momentum_total_weight * momentum
             + params.trend_weight * trend
@@ -209,7 +199,6 @@ def rank_features(
 
     ordered = sorted(scores.items(), key=lambda item: (-item[1], item[0]))
     ranked = tuple(
-        RankedStock(symbol, rank, score)
-        for rank, (symbol, score) in enumerate(ordered, start=1)
+        RankedStock(symbol, rank, score) for rank, (symbol, score) in enumerate(ordered, start=1)
     )
     return RankingResult(session, ranked, tuple(exclusions))

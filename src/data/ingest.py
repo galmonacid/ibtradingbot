@@ -164,9 +164,7 @@ def ingest_daily_bars(path: Path, config: AppConfig) -> IngestionResult:
     for line_number, row in enumerate(reader, start=2):
         candidate, reasons = _parse_row(line_number, row)
         if candidate is None:
-            quarantined.append(
-                QuarantinedRecord(_frozen_values(row), tuple(sorted(reasons)))
-            )
+            quarantined.append(QuarantinedRecord(_frozen_values(row), tuple(sorted(reasons))))
         else:
             parsed.append(candidate)
 
@@ -179,9 +177,7 @@ def ingest_daily_bars(path: Path, config: AppConfig) -> IngestionResult:
             unique.append(candidates[0])
         else:
             for candidate in candidates:
-                quarantined.append(
-                    QuarantinedRecord(candidate.values, ("duplicate_key",))
-                )
+                quarantined.append(QuarantinedRecord(candidate.values, ("duplicate_key",)))
 
     anomaly_reasons: dict[_ParsedRow, set[str]] = defaultdict(set)
     notice_reasons: dict[_ParsedRow, set[str]] = defaultdict(set)

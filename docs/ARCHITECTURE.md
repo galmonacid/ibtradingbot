@@ -225,6 +225,20 @@ Parquet:
     immutable historical data
 ```
 
+For Phase 3, preserve a three-layer historical-data lineage: immutable, commit-pinned snapshots of
+`chinobing/historical_sp500_constituents` for primary S&P 500 membership,
+`unliftedq/index-constitution` for ticker/delisting events, and `riazarbi/sp500-scraper` plus
+historical SPY holdings for QA; immutable Tiingo extracts for bars, dividends, and splits; and
+derived canonical security-master, membership-interval, and Parquet datasets. A manifest links the
+layers by repository URL/commit SHA, file hashes, retrieval parameters, provider metadata,
+transformation version, and data-quality/audit results. Analytics reads only canonical data; it must
+not call providers directly.
+
+FMP Basic responses form a supplemental immutable validation layer: historical EOD prices,
+dividends, delistings, and security-metadata responses are compared with canonical sources during
+ingestion. They may enrich provenance or trigger quarantine, but may not backfill canonical values,
+override point-in-time identity, or be queried by analytics directly.
+
 Back up:
 
 ```text

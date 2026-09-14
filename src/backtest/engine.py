@@ -7,6 +7,7 @@ from bisect import bisect_right
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date as Date
+from enum import StrEnum
 from typing import Literal, Protocol
 
 from src.backtest.costs import CostModel, Side
@@ -60,6 +61,14 @@ class BacktestDataError(ValueError):
     """Raised when portfolio valuation would require unavailable market data."""
 
 
+class RiskState(StrEnum):
+    """Close-marked portfolio drawdown state."""
+
+    NORMAL = "normal"
+    SOFT = "soft"
+    HARD = "hard"
+
+
 @dataclass(frozen=True)
 class Trade:
     date: Date
@@ -73,7 +82,7 @@ class Trade:
     commission: float
     slippage_cost: float
     fx_cost: float
-    reason: Literal["rebalance", "disappearance"]
+    reason: Literal["rebalance", "risk_reduction", "drawdown_hard", "disappearance"]
 
     @property
     def total_cost(self) -> float:
@@ -86,6 +95,31 @@ class EquityPoint:
     equity: float
     cash: float
     gross_exposure: float
+    high_water_mark: float
+    drawdown: float
+    risk_state: RiskState
+
+
+@dataclass(frozen=True)
+class RiskEvent:
+    """An observable risk-state transition decided after a session close."""
+
+    date: Date
+    previous_state: RiskState
+    state: RiskState
+    equity: float
+    high_water_mark: float
+    drawdown: float
+
+
+@dataclass(frozen=True)
+class AppliedTarget:
+    """The risk-adjusted target accepted for one execution session."""
+
+    date: Date
+    signal_date: Date
+    reason: Literal["rebalance", "risk_reduction", "drawdown_hard"]
+    weights: dict[str, float]
 
 
 @dataclass(frozen=True)
@@ -101,8 +135,30 @@ class BacktestResult:
     equity_curve: tuple[EquityPoint, ...]
     trades: tuple[Trade, ...]
     execution_issues: tuple[ExecutionIssue, ...]
+    risk_events: tuple[RiskEvent, ...]
+    applied_targets: tuple[AppliedTarget, ...]
     final_cash: float
     final_positions: dict[str, float]
+    final_risk_state: RiskState
+
+
+def _apply_soft_drawdown_limits(
+    targets: Mapping[str, float],
+    *,
+    exposure_ceiling: float,
+    max_position_weight: float,
+) -> dict[str, float]:
+    """Apply soft-state caps without ever increasing a requested weight."""
+    capped = {
+        symbol: min(weight, max_position_weight / 2.0)
+        for symbol, weight in targets.items()
+        if weight > 0.0
+    }
+    total = math.fsum(capped.values())
+    if total <= exposure_ceiling or total <= 0.0:
+        return capped
+    scale = exposure_ceiling / total
+    return {symbol: weight * scale for symbol, weight in capped.items()}
 
 
 def _validate_targets(
@@ -139,6 +195,8 @@ def run_backtest(
     cash_buffer: float = 0.02,
     max_position_weight: float = 0.30,
     max_positions: int = 5,
+    soft_drawdown_threshold: float | None = None,
+    hard_drawdown_threshold: float | None = None,
 ) -> BacktestResult:
     """Execute dated targets at the strictly following available session open.
 
@@ -157,6 +215,15 @@ def run_backtest(
         or not 0 <= max_positions <= 5
     ):
         raise ValueError("max_positions must be an integer between 0 and 5")
+    if (soft_drawdown_threshold is None) != (hard_drawdown_threshold is None):
+        raise ValueError("soft and hard drawdown thresholds must be configured together")
+    if soft_drawdown_threshold is not None and hard_drawdown_threshold is not None:
+        if (
+            not math.isfinite(soft_drawdown_threshold)
+            or not math.isfinite(hard_drawdown_threshold)
+            or not 0.0 < soft_drawdown_threshold < hard_drawdown_threshold <= 1.0
+        ):
+            raise ValueError("drawdown thresholds must satisfy 0 < soft < hard <= 1")
     cost_model = costs or CostModel()
     delisting_by_key: dict[tuple[Date, str], DelistingEvent] = {}
     for event in delistings:
@@ -197,7 +264,15 @@ def run_backtest(
     last_prices: dict[str, float] = {}
     trades: list[Trade] = []
     execution_issues: list[ExecutionIssue] = []
+    risk_events: list[RiskEvent] = []
+    applied_targets: list[AppliedTarget] = []
     curve: list[EquityPoint] = []
+    risk_state = RiskState.NORMAL
+    high_water_mark = initial_cash
+    last_target_gross = 0.0
+    hard_liquidation_pending = False
+    hard_signal_date: Date | None = None
+    risk_reduction_pending: tuple[Date, Mapping[str, float], frozenset[str]] | None = None
 
     def record_trade(
         *,
@@ -207,7 +282,7 @@ def run_backtest(
         side: Side,
         shares: float,
         reference_price: float,
-        reason: Literal["rebalance", "disappearance"],
+        reason: Literal["rebalance", "risk_reduction", "drawdown_hard", "disappearance"],
     ) -> tuple[float, Trade]:
         execution_price = cost_model.execution_price(reference_price, side)
         gross_notional = shares * execution_price
@@ -268,11 +343,51 @@ def run_backtest(
             )
             cash += proceeds
 
-        if session in scheduled:
-            signal_date, target_weights = scheduled[session]
+        scheduled_rebalance = scheduled.get(session)
+        reduction_symbols: frozenset[str] = frozenset()
+        if hard_liquidation_pending:
+            if hard_signal_date is None:  # pragma: no cover - local state invariant
+                raise RuntimeError("hard liquidation is missing its signal date")
+            signal_date = hard_signal_date
+            target_weights: Mapping[str, float] = {}
+            trade_reason: Literal["rebalance", "risk_reduction", "drawdown_hard"] = "drawdown_hard"
+            hard_liquidation_pending = False
+        elif scheduled_rebalance is not None:
+            signal_date, requested_targets = scheduled_rebalance
+            trade_reason = "rebalance"
+            # A scheduled strategy target supersedes a pending concentration
+            # trim, but still receives the active drawdown overlay. This keeps
+            # scheduled exits (especially risk-off liquidation) from being lost.
+            risk_reduction_pending = None
+            if risk_state is RiskState.HARD:
+                target_weights = {}
+            elif risk_state is RiskState.SOFT:
+                target_weights = _apply_soft_drawdown_limits(
+                    requested_targets,
+                    exposure_ceiling=last_target_gross,
+                    max_position_weight=max_position_weight,
+                )
+            else:
+                target_weights = requested_targets
+            last_target_gross = math.fsum(target_weights.values())
+        elif risk_reduction_pending is not None:
+            signal_date, target_weights, reduction_symbols = risk_reduction_pending
+            trade_reason = "risk_reduction"
+            risk_reduction_pending = None
+            last_target_gross = math.fsum(target_weights.values())
+        else:
+            signal_date = session
+            target_weights = {}
+            trade_reason = "rebalance"
+
+        if hard_liquidation_pending is False and (
+            scheduled_rebalance is not None or trade_reason in ("risk_reduction", "drawdown_hard")
+        ):
+            applied_targets.append(
+                AppliedTarget(session, signal_date, trade_reason, dict(target_weights))
+            )
             open_prices = {
-                symbol: bar.open * bar.adjusted_close / bar.close
-                for symbol, bar in day.items()
+                symbol: bar.open * bar.adjusted_close / bar.close for symbol, bar in day.items()
             }
             for symbol, weight in target_weights.items():
                 if weight > 0.0 and symbol not in open_prices:
@@ -290,7 +405,16 @@ def run_backtest(
             converged = False
             for _iteration in range(50):
                 desired_shares = {
-                    symbol: posttrade_equity * weight / open_prices[symbol]
+                    symbol: (
+                        min(
+                            positions.get(symbol, 0.0),
+                            posttrade_equity * weight / open_prices[symbol],
+                        )
+                        if trade_reason == "risk_reduction" and symbol in reduction_symbols
+                        else positions.get(symbol, 0.0)
+                        if trade_reason == "risk_reduction"
+                        else posttrade_equity * weight / open_prices[symbol]
+                    )
                     for symbol, weight in target_weights.items()
                     if weight > 0.0 and symbol in open_prices
                 }
@@ -319,11 +443,19 @@ def run_backtest(
                     f"target on {signal_date} cannot be executed safely with configured costs"
                 )
             desired_shares = {
-                symbol: posttrade_equity * weight / open_prices[symbol]
+                symbol: (
+                    min(
+                        positions.get(symbol, 0.0),
+                        posttrade_equity * weight / open_prices[symbol],
+                    )
+                    if trade_reason == "risk_reduction" and symbol in reduction_symbols
+                    else positions.get(symbol, 0.0)
+                    if trade_reason == "risk_reduction"
+                    else posttrade_equity * weight / open_prices[symbol]
+                )
                 for symbol, weight in target_weights.items()
                 if weight > 0.0 and symbol in open_prices
             }
-
 
             # Preflight the complete rebalance before mutating portfolio state.
             # Fixed commissions make costs discontinuous, so a target can be
@@ -337,15 +469,11 @@ def run_backtest(
                 if abs(delta) <= 1e-12:
                     continue
                 estimated_side: Side = "buy" if delta > 0.0 else "sell"
-                execution_price = cost_model.execution_price(
-                    open_prices[symbol], estimated_side
-                )
+                execution_price = cost_model.execution_price(open_prices[symbol], estimated_side)
                 gross_notional = abs(delta) * execution_price
                 fee = cost_model.commission_per_order + cost_model.fx_cost(gross_notional)
                 projected_cash += (
-                    -(gross_notional + fee)
-                    if estimated_side == "buy"
-                    else gross_notional - fee
+                    -(gross_notional + fee) if estimated_side == "buy" else gross_notional - fee
                 )
             projected_holdings = sum(
                 shares * open_prices[symbol] for symbol, shares in desired_shares.items()
@@ -386,7 +514,7 @@ def run_backtest(
                         side="sell",
                         shares=shares,
                         reference_price=open_prices[symbol],
-                        reason="rebalance",
+                        reason=trade_reason,
                     )
                     cash += cash_change
                     if desired <= 1e-12:
@@ -408,7 +536,7 @@ def run_backtest(
                     side="buy",
                     shares=requested,
                     reference_price=open_prices[symbol],
-                    reason="rebalance",
+                    reason=trade_reason,
                 )
                 cash += cash_change
                 new_position = current + requested
@@ -419,19 +547,88 @@ def run_backtest(
                     raise RuntimeError("cost reservation failed: negative cash")
 
         holdings_value = sum(
-            shares * day[symbol].adjusted_close
-            if symbol in day
-            else shares * last_prices[symbol]
+            shares * day[symbol].adjusted_close if symbol in day else shares * last_prices[symbol]
             for symbol, shares in positions.items()
         )
         equity = cash + holdings_value
         exposure = holdings_value / equity if equity > 0.0 else 0.0
-        curve.append(EquityPoint(session, equity, cash, exposure))
+        high_water_mark = max(high_water_mark, equity)
+        drawdown = equity / high_water_mark - 1.0
+        previous_risk_state = risk_state
+        if soft_drawdown_threshold is not None and hard_drawdown_threshold is not None:
+            if risk_state is not RiskState.HARD and drawdown <= -hard_drawdown_threshold + 1e-12:
+                risk_state = RiskState.HARD
+                hard_signal_date = session
+                hard_liquidation_pending = bool(positions)
+            elif risk_state is not RiskState.HARD:
+                risk_state = (
+                    RiskState.SOFT
+                    if drawdown <= -soft_drawdown_threshold + 1e-12
+                    else RiskState.NORMAL
+                )
+        if risk_state is not previous_risk_state:
+            risk_events.append(
+                RiskEvent(
+                    session,
+                    previous_risk_state,
+                    risk_state,
+                    equity,
+                    high_water_mark,
+                    drawdown,
+                )
+            )
+        if risk_state is not RiskState.HARD and positions:
+            marked_weights = {
+                symbol: shares * day[symbol].adjusted_close / equity
+                for symbol, shares in positions.items()
+            }
+            active_cap = (
+                max_position_weight / 2.0 if risk_state is RiskState.SOFT else max_position_weight
+            )
+            breached_symbols = frozenset(
+                symbol for symbol, weight in marked_weights.items() if weight > active_cap + 1e-12
+            )
+            if breached_symbols:
+                reduction_weights = (
+                    _apply_soft_drawdown_limits(
+                        marked_weights,
+                        exposure_ceiling=last_target_gross,
+                        max_position_weight=max_position_weight,
+                    )
+                    if risk_state is RiskState.SOFT
+                    else {
+                        symbol: min(weight, active_cap) for symbol, weight in marked_weights.items()
+                    }
+                )
+                reduction_symbols = frozenset(
+                    symbol
+                    for symbol, weight in marked_weights.items()
+                    if reduction_weights[symbol] < weight - 1e-12
+                )
+                risk_reduction_pending = (
+                    session,
+                    reduction_weights,
+                    reduction_symbols,
+                )
+        curve.append(
+            EquityPoint(
+                session,
+                equity,
+                cash,
+                exposure,
+                high_water_mark,
+                drawdown,
+                risk_state,
+            )
+        )
 
     return BacktestResult(
         tuple(curve),
         tuple(trades),
         tuple(execution_issues),
+        tuple(risk_events),
+        tuple(applied_targets),
         cash,
         dict(positions),
+        risk_state,
     )

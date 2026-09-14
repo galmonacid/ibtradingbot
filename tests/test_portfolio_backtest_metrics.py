@@ -8,6 +8,7 @@ from src.backtest.engine import (
     BacktestDataError,
     DelistingEvent,
     PriceBar,
+    RiskState,
     run_backtest,
 )
 from src.backtest.metrics import TradeOutcome, benchmark_relative_metrics, performance_metrics
@@ -41,14 +42,17 @@ def test_equal_weight_targets_preserve_all_hard_caps() -> None:
         max_positions=5,
     )
     assert sparse == {"AAA": 0.30, "BBB": 0.30}
-    assert build_equal_weight_targets(
-        ["AAA"],
-        target_positions=4,
-        regime_ceiling=0.0,
-        cash_buffer=0.02,
-        max_position_weight=0.30,
-        max_positions=5,
-    ) == {}
+    assert (
+        build_equal_weight_targets(
+            ["AAA"],
+            target_positions=4,
+            regime_ceiling=0.0,
+            cash_buffer=0.02,
+            max_position_weight=0.30,
+            max_positions=5,
+        )
+        == {}
+    )
 
 
 def test_backtest_executes_next_session_with_costs_and_never_negative_cash() -> None:
@@ -279,3 +283,200 @@ def test_standard_metric_formulas_are_explicit() -> None:
     assert report.calmar_ratio == pytest.approx(expected_cagr / 0.10)
     assert report.turnover == pytest.approx(150.0 / 103.0)
     assert report.exposure == pytest.approx(0.5)
+
+
+def test_soft_drawdown_is_causal_and_reduces_the_next_target() -> None:
+    symbols = ("AAA", "BBB", "CCC", "DDD")
+    bars = [
+        PriceBar(date(2024, 1, day), symbol, price, price, price)
+        for day, price in ((1, 100.0), (2, 100.0), (3, 89.0), (4, 89.0))
+        for symbol in symbols
+    ]
+    full_target = dict.fromkeys(symbols, 0.245)
+    result = run_backtest(
+        bars,
+        {date(2024, 1, 1): full_target, date(2024, 1, 3): full_target},
+        costs=CostModel(0.0, 0.0, 0.0),
+        soft_drawdown_threshold=0.10,
+        hard_drawdown_threshold=0.15,
+    )
+
+    assert result.risk_events[0].date == date(2024, 1, 3)
+    assert result.risk_events[0].state is RiskState.SOFT
+    assert all(trade.date > trade.signal_date for trade in result.trades if trade.signal_date)
+    final_equity = result.equity_curve[-1].equity
+    final_weights = {
+        symbol: shares * 89.0 / final_equity for symbol, shares in result.final_positions.items()
+    }
+    assert max(final_weights.values()) == pytest.approx(0.15)
+    assert sum(final_weights.values()) == pytest.approx(0.60)
+
+
+def test_hard_drawdown_liquidates_next_session_and_remains_latched() -> None:
+    symbols = ("AAA", "BBB", "CCC", "DDD")
+    bars = [
+        PriceBar(date(2024, 1, day), symbol, price, price, price)
+        for day, price in (
+            (1, 100.0),
+            (2, 100.0),
+            (3, 80.0),
+            (4, 80.0),
+            (5, 100.0),
+        )
+        for symbol in symbols
+    ]
+    full_target = dict.fromkeys(symbols, 0.245)
+    result = run_backtest(
+        bars,
+        {
+            date(2024, 1, 1): full_target,
+            date(2024, 1, 3): full_target,
+            date(2024, 1, 4): full_target,
+        },
+        costs=CostModel(0.0, 0.0, 0.0),
+        soft_drawdown_threshold=0.10,
+        hard_drawdown_threshold=0.15,
+    )
+
+    assert result.risk_events[0].date == date(2024, 1, 3)
+    assert result.risk_events[0].state is RiskState.HARD
+    liquidation = [trade for trade in result.trades if trade.reason == "drawdown_hard"]
+    assert liquidation
+    assert {trade.date for trade in liquidation} == {date(2024, 1, 4)}
+    assert not result.final_positions
+    assert result.final_risk_state is RiskState.HARD
+    assert not [
+        trade for trade in result.trades if trade.side == "buy" and trade.date > date(2024, 1, 3)
+    ]
+    assert all(
+        point.high_water_mark >= result.equity_curve[index - 1].high_water_mark
+        for index, point in enumerate(result.equity_curve[1:], start=1)
+    )
+
+
+def test_soft_drawdown_queues_risk_reduction_without_a_strategy_signal() -> None:
+    symbols = ("AAA", "BBB", "CCC", "DDD")
+    bars = [
+        PriceBar(date(2024, 2, day), symbol, price, price, price)
+        for day, price in ((1, 100.0), (2, 100.0), (3, 89.0), (4, 89.0))
+        for symbol in symbols
+    ]
+    result = run_backtest(
+        bars,
+        {date(2024, 2, 1): dict.fromkeys(symbols, 0.245)},
+        costs=CostModel(0.0, 0.0, 0.0),
+        soft_drawdown_threshold=0.10,
+        hard_drawdown_threshold=0.15,
+    )
+
+    reductions = [target for target in result.applied_targets if target.reason == "risk_reduction"]
+    assert len(reductions) == 1
+    assert reductions[0].signal_date == date(2024, 2, 3)
+    assert reductions[0].date == date(2024, 2, 4)
+    assert max(reductions[0].weights.values()) == pytest.approx(0.15)
+
+
+def test_concentration_drift_is_reduced_on_the_next_session() -> None:
+    prices = {
+        1: {"AAA": 100.0, "BBB": 100.0},
+        2: {"AAA": 100.0, "BBB": 100.0},
+        3: {"AAA": 300.0, "BBB": 50.0},
+        4: {"AAA": 300.0, "BBB": 50.0},
+    }
+    bars = [
+        PriceBar(date(2024, 3, day), symbol, price, price, price)
+        for day, by_symbol in prices.items()
+        for symbol, price in by_symbol.items()
+    ]
+    result = run_backtest(
+        bars,
+        {date(2024, 3, 1): {"AAA": 0.30, "BBB": 0.30}},
+        costs=CostModel(0.0, 0.0, 0.0),
+    )
+
+    reduction = [target for target in result.applied_targets if target.reason == "risk_reduction"]
+    assert len(reduction) == 1
+    assert reduction[0].signal_date == date(2024, 3, 3)
+    assert reduction[0].date == date(2024, 3, 4)
+    assert max(reduction[0].weights.values()) <= 0.30
+    reduction_trades = [trade for trade in result.trades if trade.reason == "risk_reduction"]
+    assert {(trade.symbol, trade.side) for trade in reduction_trades} == {("AAA", "sell")}
+
+
+def test_scheduled_exit_supersedes_pending_concentration_reduction() -> None:
+    prices = {
+        1: {"AAA": 100.0, "BBB": 100.0},
+        2: {"AAA": 100.0, "BBB": 100.0},
+        3: {"AAA": 300.0, "BBB": 50.0},
+        4: {"AAA": 300.0, "BBB": 50.0},
+    }
+    bars = [
+        PriceBar(date(2024, 6, day), symbol, price, price, price)
+        for day, by_symbol in prices.items()
+        for symbol, price in by_symbol.items()
+    ]
+    result = run_backtest(
+        bars,
+        {
+            date(2024, 6, 1): {"AAA": 0.30, "BBB": 0.30},
+            date(2024, 6, 3): {},
+        },
+        costs=CostModel(0.0, 0.0, 0.0),
+    )
+
+    applied = [target for target in result.applied_targets if target.date == date(2024, 6, 4)]
+    assert len(applied) == 1
+    assert applied[0].reason == "rebalance"
+    assert applied[0].weights == {}
+    assert not result.final_positions
+
+
+@pytest.mark.parametrize(
+    ("drawdown", "expected"),
+    [
+        (0.099999, RiskState.NORMAL),
+        (0.10, RiskState.SOFT),
+        (0.149999, RiskState.SOFT),
+        (0.15, RiskState.HARD),
+    ],
+)
+def test_drawdown_boundaries_are_inclusive(drawdown: float, expected: RiskState) -> None:
+    symbols = ("AAA", "BBB", "CCC", "DDD")
+    crash_price = ((100_000.0 * (1.0 - drawdown)) - 2_000.0) / 980.0
+    bars = [
+        PriceBar(date(2024, 4, day), symbol, price, price, price)
+        for day, price in ((1, 100.0), (2, 100.0), (3, crash_price))
+        for symbol in symbols
+    ]
+    result = run_backtest(
+        bars,
+        {date(2024, 4, 1): dict.fromkeys(symbols, 0.245)},
+        costs=CostModel(0.0, 0.0, 0.0),
+        soft_drawdown_threshold=0.10,
+        hard_drawdown_threshold=0.15,
+    )
+    assert result.final_risk_state is expected
+
+
+def test_hard_liquidation_uses_next_available_session_across_gap() -> None:
+    symbols = ("AAA", "BBB", "CCC", "DDD")
+    bars = [
+        PriceBar(session, symbol, price, price, price)
+        for session, price in (
+            (date(2024, 5, 1), 100.0),
+            (date(2024, 5, 2), 100.0),
+            (date(2024, 5, 3), 80.0),
+            (date(2024, 5, 6), 80.0),
+        )
+        for symbol in symbols
+    ]
+    result = run_backtest(
+        bars,
+        {date(2024, 5, 1): dict.fromkeys(symbols, 0.245)},
+        costs=CostModel(0.0, 0.0, 0.0),
+        soft_drawdown_threshold=0.10,
+        hard_drawdown_threshold=0.15,
+    )
+    liquidations = [trade for trade in result.trades if trade.reason == "drawdown_hard"]
+    assert {trade.signal_date for trade in liquidations} == {date(2024, 5, 3)}
+    assert {trade.date for trade in liquidations} == {date(2024, 5, 6)}

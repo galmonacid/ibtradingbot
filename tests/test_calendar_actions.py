@@ -59,8 +59,7 @@ def test_corporate_action_loader_supports_empty_and_explicit_delistings(
 
     path = tmp_path / "actions.csv"
     path.write_text(
-        "date,symbol,event_type,cash_per_share\n"
-        "2024-01-03,aaa,delisting,12.5\n",
+        "date,symbol,event_type,cash_per_share\n2024-01-03,aaa,delisting,12.5\n",
         encoding="utf-8",
     )
     actions = load_corporate_actions(path)

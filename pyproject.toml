@@ -4,13 +4,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "momentum-ml-bot"
-version = "0.1.0"
-description = "Deterministic research baseline for a long-only momentum trading system."
+version = "0.2.0"
+description = "Risk-aware deterministic research baseline for a long-only momentum system."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = ["PyYAML>=6.0.2"]
 
 [project.optional-dependencies]
+public-data = ["pitindex==0.2.1", "yfinance==1.7.0"]
+historical-data = ["pyarrow>=18.0,<24"]
 dev = [
   "build>=1.2",
   "mypy>=1.13",
@@ -22,6 +24,11 @@ dev = [
 [project.scripts]
 momentum-sample-pipeline = "src.cli.sample_pipeline:main"
 momentum-research-pipeline = "src.cli.research_pipeline:main"
+momentum-validation-pipeline = "src.cli.validation_pipeline:main"
+momentum-public-reconstructed = "src.cli.public_reconstructed:main"
+momentum-public-daily-prices = "src.cli.public_prices:main"
+momentum-historical-producer = "src.cli.historical_producer:main"
+momentum-historical-build = "src.cli.historical_build:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]

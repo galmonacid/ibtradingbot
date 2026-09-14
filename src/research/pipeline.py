@@ -1,4 +1,4 @@
-"""Phase 1 orchestration without network or broker side effects."""
+"""Phase 2 risk-aware research orchestration without external side effects."""
 
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ from pathlib import Path
 from typing import Any
 
 from src.backtest.costs import CostModel
+from src.backtest.engine import BacktestResult, Trade, run_backtest
 from src.backtest.engine import PriceBar as BacktestBar
-from src.backtest.engine import Trade, run_backtest
 from src.backtest.metrics import (
     TradeOutcome,
     benchmark_relative_metrics,
@@ -26,13 +26,27 @@ from src.data.calendar import (
     weekly_signal_dates,
 )
 from src.data.corporate_actions import CorporateActionsError, load_corporate_actions
+from src.data.historical_security_master import (
+    HistoricalSecurityMasterError,
+    load_historical_security_master,
+)
 from src.data.ingest import IngestionError, ingest_daily_bars
+from src.data.point_in_time_universe import (
+    PointInTimeUniverseError,
+    filter_point_in_time_universe,
+    load_membership_intervals,
+)
 from src.data.universe import UniverseError, filter_universe, load_seed_universe
 from src.features import Regime, RegimeParameters, build_features, classify_regimes
-from src.portfolio import build_equal_weight_targets
-from src.strategy import RankingParameters, rank_features
+from src.portfolio import (
+    PortfolioConstructionError,
+    build_equal_weight_targets,
+    build_inverse_volatility_targets,
+    estimate_annualized_covariance,
+)
+from src.strategy import RankingParameters, rank_features, select_with_rank_hysteresis
 
-STRATEGY_VERSION = "phase1-deterministic-v1"
+STRATEGY_VERSION = "phase2-risk-portfolio-v1"
 
 
 class ResearchError(ValueError):
@@ -151,6 +165,30 @@ def _serialize_mapping(mapping: Mapping[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in mapping.items()}
 
 
+def _aligned_price_history(
+    bars_by_key: Mapping[tuple[date, str], float],
+    sessions: Sequence[date],
+    symbols: Sequence[str],
+    as_of_date: date,
+    *,
+    lookback_returns: int = 20,
+) -> tuple[dict[str, list[float]], dict[str, str]]:
+    """Return strictly as-of, benchmark-session-aligned adjusted price histories."""
+    prior_sessions = [session for session in sessions if session <= as_of_date]
+    required_sessions = prior_sessions[-(lookback_returns + 1) :]
+    if len(required_sessions) < lookback_returns + 1:
+        return {}, dict.fromkeys(symbols, "insufficient_covariance_history")
+    histories: dict[str, list[float]] = {}
+    excluded: dict[str, str] = {}
+    for symbol in symbols:
+        values = [bars_by_key.get((session, symbol)) for session in required_sessions]
+        if any(value is None for value in values):
+            excluded[symbol] = "unaligned_covariance_history"
+            continue
+        histories[symbol] = [float(value) for value in values if value is not None]
+    return histories, excluded
+
+
 def run_research(
     config_path: Path,
     data_path: Path,
@@ -160,18 +198,42 @@ def run_research(
     *,
     initial_cash: float = 100_000.0,
     run_timestamp: datetime | None = None,
+    point_in_time_universe_path: Path | None = None,
+    historical_security_master_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Run the Phase 1 engineering baseline and return a JSON-ready report."""
+    """Run the Phase 2 engineering baseline and return a JSON-ready report."""
 
     if not math.isfinite(initial_cash) or initial_cash <= 0.0:
         raise ResearchError("initial cash must be finite and positive")
     config = load_config(config_path)
+    if (point_in_time_universe_path is None) != (historical_security_master_path is None):
+        raise ResearchError(
+            "point-in-time universe and historical security master must be supplied together"
+        )
     try:
         ingestion = ingest_daily_bars(data_path, config)
-        securities = load_seed_universe(universe_path, config)
+        securities = (
+            load_historical_security_master(
+                historical_security_master_path, benchmark=config.benchmark
+            )
+            if historical_security_master_path is not None
+            else load_seed_universe(universe_path, config)
+        )
         calendar = load_trading_calendar(calendar_path)
         corporate_actions = load_corporate_actions(corporate_actions_path)
-    except (IngestionError, UniverseError, CalendarError, CorporateActionsError) as error:
+        membership_intervals = (
+            load_membership_intervals(point_in_time_universe_path)
+            if point_in_time_universe_path is not None
+            else None
+        )
+    except (
+        IngestionError,
+        UniverseError,
+        CalendarError,
+        CorporateActionsError,
+        PointInTimeUniverseError,
+        HistoricalSecurityMasterError,
+    ) as error:
         raise ResearchError(str(error)) from error
     if ingestion.quarantined:
         reasons = sorted({reason for row in ingestion.quarantined for reason in row.reasons})
@@ -218,15 +280,20 @@ def run_research(
         if (event.date, event.symbol) in bar_keys:
             raise ResearchError("delisting event conflicts with a price bar on the same date")
     universe_by_date = {
-        session: filter_universe(ingestion.bars, securities, session, config)
+        session: (
+            filter_point_in_time_universe(
+                ingestion.bars, securities, membership_intervals, session, config
+            )
+            if membership_intervals is not None
+            else filter_universe(ingestion.bars, securities, session, config)
+        )
         for session in benchmark_sessions
     }
     features = build_features(
         ingestion.bars,
         benchmark=config.benchmark,
         eligible_symbols_by_date={
-            session: selection.eligible_symbols
-            for session, selection in universe_by_date.items()
+            session: selection.eligible_symbols for session, selection in universe_by_date.items()
         },
     )
     regimes = {
@@ -238,11 +305,14 @@ def run_research(
         )
     }
     targets: dict[date, dict[str, float]] = {}
+    equal_weight_targets: dict[date, dict[str, float]] = {}
     signal_report: list[dict[str, Any]] = []
     portfolio = config.values["portfolio"]
     strategy = config.values["strategy"]
     assert isinstance(portfolio, dict) and isinstance(strategy, dict)
     exposure_by_regime = _exposures(config)
+    adjusted_prices = {(bar.date, bar.symbol): bar.adjusted_close for bar in ingestion.bars}
+    incumbents: tuple[str, ...] = ()
     for signal_date in weekly_signal_dates(tuple(benchmark_sessions), calendar):
         universe = universe_by_date[signal_date]
         allowed = set(universe.eligible_symbols)
@@ -252,6 +322,7 @@ def run_research(
             if row.date == signal_date and (row.symbol in allowed or row.symbol == config.benchmark)
         )
         ranked_symbols: list[str] = []
+        ranked_items: tuple[Any, ...] = ()
         ranking_exclusions: list[dict[str, str]] = []
         if allowed:
             ranking = rank_features(
@@ -260,25 +331,111 @@ def run_research(
                 benchmark=config.benchmark,
                 parameters=_ranking_parameters(config),
             )
+            ranked_items = ranking.ranked
             ranked_symbols = [item.symbol for item in ranking.ranked]
             ranking_exclusions = [asdict(item) for item in ranking.exclusions]
         regime_row = regimes.get(signal_date)
         regime = Regime.NEUTRAL if regime_row is None else regime_row.regime
-        target = build_equal_weight_targets(
-            ranked_symbols,
-            target_positions=int(strategy["target_positions"]),
+        mandatory_exclusions = {item["symbol"]: item["reason"] for item in ranking_exclusions}
+        mandatory_exclusions.update(
+            {item.symbol: "universe:" + ",".join(item.reasons) for item in universe.exclusions}
+        )
+        selection = select_with_rank_hysteresis(
+            ranked_items,
+            incumbents,
+            int(strategy["target_positions"]),
+            mandatory_exclusions=mandatory_exclusions,
+        )
+        selected_symbols = [item.symbol for item in selection.selected]
+        row_by_symbol = {row.symbol: row for row in rows}
+        histories, covariance_exclusions = _aligned_price_history(
+            adjusted_prices,
+            benchmark_sessions,
+            selected_symbols,
+            signal_date,
+        )
+        usable_symbols = [
+            symbol for symbol in selected_symbols if symbol not in covariance_exclusions
+        ]
+        construction_exclusions = dict(covariance_exclusions)
+        validated_symbols: list[str] = []
+        for symbol in usable_symbols:
+            volatility = row_by_symbol[symbol].values["vol_20d"]
+            if volatility is None or not math.isfinite(volatility) or volatility <= 0.0:
+                construction_exclusions[symbol] = "invalid_volatility"
+                continue
+            try:
+                estimate_annualized_covariance({symbol: histories[symbol]})
+            except PortfolioConstructionError as error:
+                construction_exclusions[symbol] = f"invalid_covariance_history:{error}"
+                continue
+            validated_symbols.append(symbol)
+        sizing_details: dict[str, Any] = {
+            "expected_volatility_before_scaling": 0.0,
+            "expected_volatility": 0.0,
+            "volatility_scale": 1.0,
+            "unscaled_weights": {},
+        }
+        target: dict[str, float] = {}
+        if validated_symbols and exposure_by_regime[str(regime)] > 0.0:
+            try:
+                annualized_volatilities: dict[str, float] = {}
+                for symbol in validated_symbols:
+                    volatility = row_by_symbol[symbol].values["vol_20d"]
+                    if volatility is None:  # ranking normally excludes this defensively
+                        raise PortfolioConstructionError(
+                            f"missing annualized volatility for {symbol}"
+                        )
+                    annualized_volatilities[symbol] = volatility
+                covariance = estimate_annualized_covariance(
+                    {symbol: histories[symbol] for symbol in validated_symbols}
+                )
+                sizing = build_inverse_volatility_targets(
+                    validated_symbols,
+                    annualized_volatilities,
+                    covariance,
+                    target_positions=int(strategy["target_positions"]),
+                    regime_ceiling=exposure_by_regime[str(regime)],
+                    target_annual_volatility=config.target_annual_volatility,
+                    cash_buffer=config.cash_buffer,
+                    min_position_weight=config.min_position_weight,
+                    max_position_weight=config.max_position_weight,
+                    max_positions=int(strategy["max_positions"]),
+                )
+                target = sizing.weights
+                construction_exclusions.update(sizing.excluded)
+                sizing_details = {
+                    "expected_volatility_before_scaling": sizing.expected_volatility_before_scaling,
+                    "expected_volatility": sizing.expected_volatility,
+                    "volatility_scale": sizing.volatility_scale,
+                    "unscaled_weights": sizing.unscaled_weights,
+                }
+            except PortfolioConstructionError as error:
+                construction_exclusions.update(
+                    dict.fromkeys(validated_symbols, f"portfolio_construction:{error}")
+                )
+        incumbents = tuple(target)
+        equal_target = build_equal_weight_targets(
+            selected_symbols,
+            target_positions=len(selected_symbols),
             regime_ceiling=exposure_by_regime[str(regime)],
-            cash_buffer=float(portfolio["cash_buffer"]),
-            max_position_weight=float(portfolio["max_position_weight"]),
+            cash_buffer=config.cash_buffer,
+            max_position_weight=config.max_position_weight,
             max_positions=int(strategy["max_positions"]),
         )
         targets[signal_date] = target
+        equal_weight_targets[signal_date] = equal_target
         signal_report.append(
             {
                 "date": signal_date.isoformat(),
                 "regime": str(regime),
                 "ranked": ranked_symbols,
+                "selected": selected_symbols,
                 "target_weights": target,
+                "equal_weight_target_weights": equal_target,
+                "selection_exclusions": [asdict(item) for item in selection.exclusions],
+                "portfolio_exclusions": construction_exclusions,
+                "sizing": sizing_details,
                 "universe_exclusions": [asdict(item) for item in universe.exclusions],
                 "ranking_exclusions": ranking_exclusions,
             }
@@ -289,23 +446,47 @@ def run_research(
         for bar in ingestion.bars
     )
     commission, slippage, fx_buffer = config.transaction_costs
+    soft_drawdown, hard_drawdown = config.drawdown_thresholds
     result = run_backtest(
         backtest_bars,
         targets,
         initial_cash=initial_cash,
         costs=CostModel(commission, slippage, fx_buffer),
         delistings=corporate_actions.delistings,
-        cash_buffer=float(portfolio["cash_buffer"]),
-        max_position_weight=float(portfolio["max_position_weight"]),
+        cash_buffer=config.cash_buffer,
+        max_position_weight=config.max_position_weight,
         max_positions=int(strategy["max_positions"]),
+        soft_drawdown_threshold=soft_drawdown,
+        hard_drawdown_threshold=hard_drawdown,
+    )
+    stress_commission, stress_slippage, stress_fx = config.stress_transaction_costs
+    stress_result = run_backtest(
+        backtest_bars,
+        targets,
+        initial_cash=initial_cash,
+        costs=CostModel(stress_commission, stress_slippage, stress_fx),
+        delistings=corporate_actions.delistings,
+        cash_buffer=config.cash_buffer,
+        max_position_weight=config.max_position_weight,
+        max_positions=int(strategy["max_positions"]),
+        soft_drawdown_threshold=soft_drawdown,
+        hard_drawdown_threshold=hard_drawdown,
+    )
+    equal_result = run_backtest(
+        backtest_bars,
+        equal_weight_targets,
+        initial_cash=initial_cash,
+        costs=CostModel(commission, slippage, fx_buffer),
+        delistings=corporate_actions.delistings,
+        cash_buffer=config.cash_buffer,
+        max_position_weight=config.max_position_weight,
+        max_positions=int(strategy["max_positions"]),
+        soft_drawdown_threshold=soft_drawdown,
+        hard_drawdown_threshold=hard_drawdown,
     )
     actionable_signals = [session for session, weights in targets.items() if weights]
-    reporting_start = (
-        min(actionable_signals) if actionable_signals else result.equity_curve[0].date
-    )
-    reporting_curve = tuple(
-        point for point in result.equity_curve if point.date >= reporting_start
-    )
+    reporting_start = min(actionable_signals) if actionable_signals else result.equity_curve[0].date
+    reporting_curve = tuple(point for point in result.equity_curve if point.date >= reporting_start)
     dates = [point.date for point in reporting_curve]
     values = [point.equity for point in reporting_curve]
     exposures = [point.gross_exposure for point in reporting_curve]
@@ -319,10 +500,58 @@ def run_research(
         exposures=exposures,
     )
 
+    def comparison_payload(comparison_result: BacktestResult) -> dict[str, Any]:
+        comparison_curve = tuple(
+            point for point in comparison_result.equity_curve if point.date >= reporting_start
+        )
+        comparison_outcomes = _trade_outcomes(comparison_result.trades)
+        comparison_notional = math.fsum(trade.gross_notional for trade in comparison_result.trades)
+        comparison_metrics = performance_metrics(
+            [point.date for point in comparison_curve],
+            [point.equity for point in comparison_curve],
+            trade_outcomes=comparison_outcomes,
+            traded_notional=comparison_notional,
+            exposures=[point.gross_exposure for point in comparison_curve],
+        )
+        comparison_commission = math.fsum(trade.commission for trade in comparison_result.trades)
+        comparison_slippage = math.fsum(trade.slippage_cost for trade in comparison_result.trades)
+        comparison_fx = math.fsum(trade.fx_cost for trade in comparison_result.trades)
+        return {
+            "metrics": asdict(comparison_metrics),
+            "costs": {
+                "commission": comparison_commission,
+                "slippage": comparison_slippage,
+                "fx_friction": comparison_fx,
+                "total": comparison_commission + comparison_slippage + comparison_fx,
+            },
+            "final_equity": comparison_curve[-1].equity,
+            "trades": len(comparison_result.trades),
+            "final_risk_state": str(comparison_result.final_risk_state),
+            "risk_events": [
+                {
+                    "date": event.date.isoformat(),
+                    "previous_state": str(event.previous_state),
+                    "state": str(event.state),
+                    "drawdown": event.drawdown,
+                }
+                for event in comparison_result.risk_events
+            ],
+            "applied_targets": [
+                {
+                    "date": target.date.isoformat(),
+                    "signal_date": target.signal_date.isoformat(),
+                    "reason": target.reason,
+                    "weights": target.weights,
+                }
+                for target in comparison_result.applied_targets
+            ],
+        }
+
+    stress_comparison = comparison_payload(stress_result)
+    equal_comparison = comparison_payload(equal_result)
+
     spy_close = {
-        bar.date: bar.adjusted_close
-        for bar in ingestion.bars
-        if bar.symbol == config.benchmark
+        bar.date: bar.adjusted_close for bar in ingestion.bars if bar.symbol == config.benchmark
     }
     if any(session not in spy_close for session in dates):
         raise ResearchError("benchmark is missing one or more strategy sessions")
@@ -338,27 +567,41 @@ def run_research(
         raise ResearchError("run timestamp must be timezone-aware")
     root = Path(__file__).parents[2]
     revision, dirty = _git_revision(root)
-    universe_bytes = universe_path.read_bytes()
+    effective_universe_path = point_in_time_universe_path or universe_path
+    universe_bytes = effective_universe_path.read_bytes()
+    point_in_time = membership_intervals is not None
     total_commission = sum(trade.commission for trade in result.trades)
     total_slippage = sum(trade.slippage_cost for trade in result.trades)
     total_fx = sum(trade.fx_cost for trade in result.trades)
     return {
-        "label": "synthetic fixed-universe engineering validation; not a performance claim",
+        "label": (
+            "point-in-time research input; not financial advice or a return guarantee"
+            if point_in_time
+            else "synthetic fixed-universe engineering validation; not a performance claim"
+        ),
         "provenance": {
             "git_revision": revision,
             "git_dirty": dirty,
             "config_sha256": config.sha256,
             "data_sha256": ingestion.source_sha256,
             "universe_sha256": sha256(universe_bytes).hexdigest(),
+            "historical_security_master_sha256": (
+                sha256(historical_security_master_path.read_bytes()).hexdigest()
+                if historical_security_master_path is not None
+                else None
+            ),
             "calendar_sha256": calendar.source_sha256,
             "calendar_exchange": calendar.exchange,
             "calendar_version": calendar.version,
             "corporate_actions_sha256": corporate_actions.source_sha256,
-            "corporate_actions_version": str(
-                config.values["corporate_actions"]["version"]
-            ),
+            "corporate_actions_version": str(config.values["corporate_actions"]["version"]),
             "initial_cash_usd": initial_cash,
-            "universe_version": config.universe_version,
+            "universe_version": (
+                membership_intervals[0].source_version
+                if membership_intervals is not None
+                else config.universe_version
+            ),
+            "point_in_time_universe": point_in_time,
             "strategy_version": STRATEGY_VERSION,
             "ml_model_version": "disabled",
             "run_timestamp_utc": timestamp.astimezone(UTC).isoformat(),
@@ -396,13 +639,29 @@ def run_research(
             "cash": asdict(cash_metrics),
             "benchmark_relative": asdict(relative_metrics),
         },
+        "comparisons": {
+            "inverse_volatility_stressed_costs": stress_comparison,
+            "equal_weight_default_costs": equal_comparison,
+        },
+        "validation_gate_assessment": {
+            "admissible_deployment_evidence": False,
+            "reason": "synthetic fixed-universe fixture; Phase 3 validation is required",
+            "stressed_cagr_threshold": 0.06,
+            "stressed_sharpe_threshold": 0.60,
+            "observed_stressed_cagr": stress_comparison["metrics"]["cagr"],
+            "observed_stressed_sharpe": stress_comparison["metrics"]["sharpe_ratio"],
+            "numeric_thresholds_met": (
+                stress_comparison["metrics"]["cagr"] is not None
+                and stress_comparison["metrics"]["sharpe_ratio"] is not None
+                and stress_comparison["metrics"]["cagr"] >= 0.06
+                and stress_comparison["metrics"]["sharpe_ratio"] >= 0.60
+            ),
+        },
         "trades": [
             {
                 **asdict(trade),
                 "date": trade.date.isoformat(),
-                "signal_date": None
-                if trade.signal_date is None
-                else trade.signal_date.isoformat(),
+                "signal_date": None if trade.signal_date is None else trade.signal_date.isoformat(),
             }
             for trade in result.trades
         ],
@@ -410,15 +669,34 @@ def run_research(
             {
                 **asdict(issue),
                 "date": issue.date.isoformat(),
-                "signal_date": None
-                if issue.signal_date is None
-                else issue.signal_date.isoformat(),
+                "signal_date": None if issue.signal_date is None else issue.signal_date.isoformat(),
             }
             for issue in result.execution_issues
         ],
+        "risk": {
+            "final_state": str(result.final_risk_state),
+            "hard_drawdown_latched": result.final_risk_state == "hard",
+            "events": [
+                {
+                    **asdict(event),
+                    "date": event.date.isoformat(),
+                    "previous_state": str(event.previous_state),
+                    "state": str(event.state),
+                }
+                for event in result.risk_events
+            ],
+            "applied_targets": [
+                {
+                    "date": target.date.isoformat(),
+                    "signal_date": target.signal_date.isoformat(),
+                    "reason": target.reason,
+                    "weights": target.weights,
+                }
+                for target in result.applied_targets
+            ],
+        },
         "equity_curve": [
-            {**asdict(point), "date": point.date.isoformat()}
-            for point in reporting_curve
+            {**asdict(point), "date": point.date.isoformat()} for point in reporting_curve
         ],
         "final_positions": _serialize_mapping(result.final_positions),
         "final_cash": result.final_cash,

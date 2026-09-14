@@ -54,10 +54,7 @@ class BenchmarkMetrics:
 
 
 def _returns(values: Sequence[float]) -> list[float]:
-    return [
-        current / previous - 1.0
-        for previous, current in zip(values, values[1:], strict=False)
-    ]
+    return [current / previous - 1.0 for previous, current in zip(values, values[1:], strict=False)]
 
 
 def _safe_ratio(numerator: float | None, denominator: float | None) -> float | None:
@@ -88,7 +85,7 @@ def performance_metrics(
     equity_values: Sequence[float],
     *,
     trade_outcomes: Sequence[TradeOutcome] = (),
-    traded_notional: float = 0.0,
+    traded_notional: float | None = None,
     exposures: Sequence[float] = (),
 ) -> PerformanceMetrics:
     """Calculate the required baseline metrics, returning ``None`` when undefined."""
@@ -98,7 +95,9 @@ def performance_metrics(
         raise ValueError("dates must be strictly increasing")
     if any(not math.isfinite(value) or value <= 0.0 for value in equity_values):
         raise ValueError("equity values must be finite and positive")
-    if not math.isfinite(traded_notional) or traded_notional < 0.0:
+    if traded_notional is not None and (
+        not math.isfinite(traded_notional) or traded_notional < 0.0
+    ):
         raise ValueError("traded_notional must be finite and non-negative")
     if exposures and len(exposures) != len(equity_values):
         raise ValueError("exposures must be empty or match equity_values")
@@ -151,7 +150,11 @@ def performance_metrics(
         calmar_ratio=calmar,
         win_rate=sum(value > 0.0 for value in returns) / len(returns) if returns else None,
         profit_factor=_safe_ratio(gains, losses),
-        turnover=traded_notional / average_equity if average_equity > 0.0 else None,
+        turnover=(
+            traded_notional / average_equity
+            if traded_notional is not None and average_equity > 0.0
+            else None
+        ),
         average_holding_period=fmean(outcome.holding_days for outcome in trade_outcomes)
         if trade_outcomes
         else None,

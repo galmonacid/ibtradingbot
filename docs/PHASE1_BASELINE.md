@@ -7,8 +7,8 @@ prove that the strategy has investment merit or meets deployment gates. The
 checked-in long price fixture is synthetic, and the versioned seed universe is
 current engineering metadata rather than historical point-in-time membership.
 
-Phase 2 retains inverse-volatility sizing, volatility targeting, rank
-hysteresis, stress costs, and drawdown controls. Phase 3 retains point-in-time
+Phase 2 adds inverse-volatility sizing, volatility targeting, rank hysteresis,
+stress costs, and drawdown controls. Phase 3 retains point-in-time
 universe reconstruction, walk-forward analysis, sensitivity analysis,
 bootstrap analysis, and deployment-gate evidence. ML and broker connectivity
 remain disabled.

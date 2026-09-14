@@ -35,6 +35,18 @@ This avoids survivorship-bias complexity during the first engineering phase.
 
 Before any claim of historical performance is made, replace the fixed present-day universe with a **historically point-in-time universe**.
 
+For Phase 3, construct that universe from the dated 1996-present membership snapshots in
+`chinobing/historical_sp500_constituents`; join `unliftedq/index-constitution` ticker-change and
+delisting events into a versioned security master; and use `riazarbi/sp500-scraper` plus historical
+SPY holdings as independent membership QA. Join that result to Tiingo raw/adjusted OHLCV and
+corporate actions. This route is suitable for initial research only after the completeness and
+independent constituent-change audit controls in
+`PHASE3_HISTORICAL_VALIDATION.md` pass; it is not a waiver of survivorship-bias safeguards.
+
+Available FMP Basic price, dividend, delisting, and security-metadata endpoints are secondary QA
+only: they may identify a source discrepancy, never replace Tiingo, primary membership, or dated
+identity evidence.
+
 ### 2.3 Benchmark
 
 `SPY` is the default market benchmark for regime detection and relative strength.

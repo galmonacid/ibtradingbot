@@ -17,7 +17,7 @@ class ConfigurationError(ValueError):
 
 @dataclass(frozen=True)
 class AppConfig:
-    """Validated configuration with typed Phase 1 accessors and provenance hash."""
+    """Validated configuration with typed research accessors and provenance hash."""
 
     values: dict[str, Any]
     sha256: str
@@ -116,6 +116,92 @@ class AppConfig:
             float(costs["fx_buffer_bps"]),
         )
 
+    @property
+    def target_annual_volatility(self) -> float:
+        return float(self._section("portfolio")["target_annual_volatility"])
+
+    @property
+    def min_position_weight(self) -> float:
+        return float(self._section("portfolio")["min_position_weight"])
+
+    @property
+    def max_position_weight(self) -> float:
+        return float(self._section("portfolio")["max_position_weight"])
+
+    @property
+    def cash_buffer(self) -> float:
+        return float(self._section("portfolio")["cash_buffer"])
+
+    @property
+    def regime_exposure_limits(self) -> dict[str, float]:
+        portfolio = self._section("portfolio")
+        return {
+            regime: float(portfolio[f"max_gross_exposure_{regime}"])
+            for regime in ("risk_on", "neutral", "risk_off")
+        }
+
+    @property
+    def drawdown_thresholds(self) -> tuple[float, float]:
+        risk = self._section("risk")
+        return (
+            float(risk["max_portfolio_drawdown_soft"]),
+            float(risk["max_portfolio_drawdown_hard"]),
+        )
+
+    @property
+    def hard_drawdown_requires_manual_reenable(self) -> bool:
+        return bool(self._section("risk")["hard_drawdown_requires_manual_reenable"])
+
+    @property
+    def rank_hysteresis_multiplier(self) -> int:
+        return int(self._section("strategy")["rank_hysteresis_multiplier"])
+
+    @property
+    def stress_transaction_costs(self) -> tuple[float, float, float]:
+        base_commission, _base_slippage, _base_fx = self.transaction_costs
+        stress = self._section("stress_costs")
+        return (
+            base_commission * float(stress["commission_multiplier"]),
+            float(stress["slippage_bps_each_side"]),
+            float(stress["fx_buffer_bps"]),
+        )
+
+    @property
+    def validation_windows(self) -> tuple[int, int, int, int]:
+        validation = self._section("validation")
+        return (
+            int(validation["initial_train_years"]),
+            int(validation["validation_years"]),
+            int(validation["test_years"]),
+            int(validation["walk_forward_step_months"]),
+        )
+
+    @property
+    def bootstrap_settings(self) -> tuple[int, int, int]:
+        validation = self._section("validation")
+        return (
+            int(validation["bootstrap_iterations"]),
+            int(validation["bootstrap_block_length"]),
+            int(validation["bootstrap_seed"]),
+        )
+
+    @property
+    def bootstrap_gate_thresholds(self) -> tuple[float, float, float]:
+        validation = self._section("validation")
+        return (
+            float(validation["minimum_bootstrap_cagr_q05"]),
+            float(validation["minimum_bootstrap_sharpe_q05"]),
+            float(validation["maximum_bootstrap_drawdown_q95"]),
+        )
+
+    @property
+    def sensitivity_grid(self) -> dict[str, tuple[int | float | str, ...]]:
+        grid = _require_mapping(
+            self._section("validation")["sensitivity_grid"],
+            "validation.sensitivity_grid",
+        )
+        return {key: tuple(value) for key, value in grid.items()}
+
 
 def _require_mapping(value: object, name: str) -> dict[str, Any]:
     if not isinstance(value, dict):
@@ -153,6 +239,8 @@ def _validate(values: dict[str, Any]) -> None:
         "risk",
         "execution",
         "costs",
+        "stress_costs",
+        "validation",
         "ml",
     ):
         _require_mapping(values.get(section_name), section_name)
@@ -187,10 +275,12 @@ def _validate(values: dict[str, Any]) -> None:
         raise ConfigurationError("strategy positions must satisfy 0 <= min <= target <= max <= 5")
     if min_positions != 0:
         raise ConfigurationError("strategy.min_positions must be 0 in Phase 1")
+    if _integer(strategy, "rank_hysteresis_multiplier", "strategy") != 2:
+        raise ConfigurationError("strategy.rank_hysteresis_multiplier must remain 2")
 
     universe = _require_mapping(values["universe"], "universe")
-    if universe.get("source") != "fixed_seed":
-        raise ConfigurationError("universe.source must be fixed_seed in Phase 1")
+    if universe.get("source") not in {"fixed_seed", "public_reconstructed"}:
+        raise ConfigurationError("universe.source must be fixed_seed or public_reconstructed")
     for key in ("version", "benchmark"):
         if not isinstance(universe.get(key), str) or not universe[key].strip():
             raise ConfigurationError(f"universe.{key} must be a non-empty string")
@@ -231,8 +321,7 @@ def _validate(values: dict[str, Any]) -> None:
         raise ConfigurationError("strategy.momentum.skip_recent_days must be 5 in Phase 1")
     trend = _require_mapping(strategy.get("trend"), "strategy.trend")
     trend_windows = [
-        _integer(trend, key, "strategy.trend")
-        for key in ("sma_fast", "sma_medium", "sma_slow")
+        _integer(trend, key, "strategy.trend") for key in ("sma_fast", "sma_medium", "sma_slow")
     ]
     if not 0 < trend_windows[0] < trend_windows[1] < trend_windows[2]:
         raise ConfigurationError("strategy trend windows must be positive and strictly increasing")
@@ -274,6 +363,7 @@ def _validate(values: dict[str, Any]) -> None:
     max_position_weight = _number(portfolio, "max_position_weight", "portfolio")
     min_position_weight = _number(portfolio, "min_position_weight", "portfolio")
     cash_buffer = _number(portfolio, "cash_buffer", "portfolio")
+    target_volatility = _number(portfolio, "target_annual_volatility", "portfolio")
     exposures = [
         _number(portfolio, f"max_gross_exposure_{regime}", "portfolio")
         for regime in ("risk_on", "neutral", "risk_off")
@@ -284,7 +374,9 @@ def _validate(values: dict[str, Any]) -> None:
     if not 0 <= min_position_weight <= max_position_weight:
         raise ConfigurationError("portfolio position weights must satisfy 0 <= min <= max")
     if min_position_weight != 0.10:
-        raise ConfigurationError("portfolio.min_position_weight must be 0.10 in Phase 1")
+        raise ConfigurationError("portfolio.min_position_weight must remain 0.10")
+    if not 0 < target_volatility <= 1:
+        raise ConfigurationError("portfolio.target_annual_volatility must be in (0, 1]")
     if not 0.02 <= cash_buffer < 1:
         raise ConfigurationError("portfolio.cash_buffer must be in [0.02, 1)")
     if not all(0 <= exposure <= 1.0 for exposure in exposures):
@@ -297,8 +389,20 @@ def _validate(values: dict[str, Any]) -> None:
     # allocating beneath it while retaining the configured cash buffer.
 
     risk = _require_mapping(values["risk"], "risk")
-    if _number(risk, "max_portfolio_drawdown_hard", "risk") != 0.15:
+    soft_drawdown = _number(risk, "max_portfolio_drawdown_soft", "risk")
+    hard_drawdown = _number(risk, "max_portfolio_drawdown_hard", "risk")
+    if not 0 < soft_drawdown < hard_drawdown:
+        raise ConfigurationError("risk drawdown thresholds must satisfy 0 < soft < hard")
+    if soft_drawdown != 0.10:
+        raise ConfigurationError("risk.max_portfolio_drawdown_soft must remain 0.10")
+    if hard_drawdown != 0.15:
         raise ConfigurationError("risk.max_portfolio_drawdown_hard must remain 0.15")
+    if risk.get("hard_drawdown_requires_manual_reenable") is not True:
+        raise ConfigurationError("risk.hard_drawdown_requires_manual_reenable must be true")
+    if "hard_stop_new_entries_days" in risk:
+        raise ConfigurationError(
+            "risk.hard_stop_new_entries_days is unsupported; hard drawdown remains latched"
+        )
 
     execution = _require_mapping(values["execution"], "execution")
     if execution.get("allow_short") is not False:
@@ -315,9 +419,94 @@ def _validate(values: dict[str, Any]) -> None:
     if _number(costs, "slippage_bps_each_side", "costs") >= 10_000:
         raise ConfigurationError("costs.slippage_bps_each_side must be below 10000")
 
+    stress_costs = _require_mapping(values["stress_costs"], "stress_costs")
+    commission_multiplier = _number(stress_costs, "commission_multiplier", "stress_costs")
+    stress_slippage = _number(stress_costs, "slippage_bps_each_side", "stress_costs")
+    stress_fx = _number(stress_costs, "fx_buffer_bps", "stress_costs")
+    if commission_multiplier != 2.0:
+        raise ConfigurationError("stress_costs.commission_multiplier must remain 2")
+    if stress_slippage != 10.0:
+        raise ConfigurationError("stress_costs.slippage_bps_each_side must remain 10")
+    if stress_fx != _number(costs, "fx_buffer_bps", "costs"):
+        raise ConfigurationError("stress FX friction must equal baseline FX friction")
+
     ml = _require_mapping(values["ml"], "ml")
     if ml.get("enabled") is not False:
         raise ConfigurationError("ml.enabled must remain false in Phase 1")
+
+    validation = _require_mapping(values["validation"], "validation")
+    durations = [
+        _integer(validation, key, "validation")
+        for key in (
+            "initial_train_years",
+            "validation_years",
+            "test_years",
+            "walk_forward_step_months",
+        )
+    ]
+    if min(durations) <= 0:
+        raise ConfigurationError("validation window durations must be positive")
+    if _integer(validation, "embargo_days", "validation") < 0:
+        raise ConfigurationError("validation.embargo_days must be non-negative")
+    if _integer(validation, "bootstrap_iterations", "validation") < 2_000:
+        raise ConfigurationError("validation.bootstrap_iterations must be at least 2000")
+    if _integer(validation, "bootstrap_block_length", "validation") < 2:
+        raise ConfigurationError("validation.bootstrap_block_length must be at least 2")
+    _integer(validation, "bootstrap_seed", "validation")
+    tolerance = _number(validation, "plateau_relative_tolerance", "validation")
+    if not 0 <= tolerance < 1:
+        raise ConfigurationError("validation.plateau_relative_tolerance must be in [0, 1)")
+    _number(validation, "minimum_economic_validation_score", "validation")
+    minimum_bootstrap_cagr = _number(validation, "minimum_bootstrap_cagr_q05", "validation")
+    minimum_bootstrap_sharpe = _number(validation, "minimum_bootstrap_sharpe_q05", "validation")
+    maximum_bootstrap_drawdown = _number(
+        validation, "maximum_bootstrap_drawdown_q95", "validation"
+    )
+    if minimum_bootstrap_cagr < -1:
+        raise ConfigurationError("validation.minimum_bootstrap_cagr_q05 must be at least -1")
+    if minimum_bootstrap_sharpe < 0:
+        raise ConfigurationError("validation.minimum_bootstrap_sharpe_q05 must be non-negative")
+    if not 0 <= maximum_bootstrap_drawdown <= 1:
+        raise ConfigurationError(
+            "validation.maximum_bootstrap_drawdown_q95 must be in [0, 1]"
+        )
+    sensitivity_grid = _require_mapping(
+        validation.get("sensitivity_grid"), "validation.sensitivity_grid"
+    )
+    required_grid = {
+        "commission_multiplier",
+        "execution_delay_sessions",
+        "momentum_63d_weight",
+        "rebalance_day",
+        "rebalance_frequency",
+        "target_positions",
+        "skip_recent_days",
+        "slippage_bps_each_side",
+        "target_annual_volatility",
+        "risk_on_breadth_threshold",
+        "trend_window_scale",
+    }
+    if set(sensitivity_grid) != required_grid:
+        raise ConfigurationError("validation.sensitivity_grid must contain the canonical axes")
+    for key, choices in sensitivity_grid.items():
+        if not isinstance(choices, list) or len(choices) < 2:
+            raise ConfigurationError(f"validation.sensitivity_grid.{key} needs at least 2 values")
+        if any(
+            isinstance(choice, bool) or not isinstance(choice, (int, float, str))
+            for choice in choices
+        ):
+            raise ConfigurationError(
+                f"validation.sensitivity_grid.{key} must contain scalar values"
+            )
+        if any(
+            isinstance(choice, (int, float)) and not math.isfinite(float(choice))
+            for choice in choices
+        ):
+            raise ConfigurationError(
+                f"validation.sensitivity_grid.{key} must contain finite numbers"
+            )
+        if len(set(choices)) != len(choices):
+            raise ConfigurationError(f"validation.sensitivity_grid.{key} has duplicates")
 
 
 def load_config(path: Path) -> AppConfig:

@@ -70,7 +70,16 @@ If it fails badly, revisit strategy rather than adding ML.
 
 Implement:
 
-- point-in-time universe
+- a versioned open-source membership + Tiingo historical-data producer:
+  `chinobing/historical_sp500_constituents` is the primary 1996-present membership
+  source; `unliftedq/index-constitution` supplies ticker-change and delisting
+  events; `riazarbi/sp500-scraper` plus historical SPY holdings provide independent
+  membership QA; Tiingo supplies raw/adjusted OHLCV, dividends, and splits; available
+  FMP Basic endpoints provide secondary price/action/delisting/security-metadata QA
+- a point-in-time S&P 500 universe and security master derived from that
+  producer
+- provider-to-canonical Parquet lineage, quality checks, and a 50–100-event
+  random constituent-change audit against an independent source
 - walk-forward engine
 - sensitivity analysis
 - bootstrap
@@ -86,7 +95,11 @@ with all acceptance criteria.
 
 Exit condition:
 
-Mandatory deterministic deployment gates pass.
+The version-pinned open-source membership/security-master + Tiingo dataset has passed
+its completeness, identity, corporate-action, and independent-audit checks, and mandatory
+deterministic deployment gates pass. Licensed CRSP/WRDS data is not a prerequisite for this
+phase. A later rerun on Norgate, Sharadar, CRSP/Compustat, or another independent dataset
+remains a recommended confirmation before increasing capital, not a substitute for these controls.
 
 ---
 
@@ -199,11 +212,17 @@ The second strategy should ideally have low correlation to V1.
 
 ## Epic: Data
 
-- [ ] Define point-in-time universe source
-- [ ] Implement daily bar ingestion
-- [ ] Implement corporate-action handling
+- [ ] Acquire and pin `chinobing/historical_sp500_constituents` membership snapshots
+- [ ] Build versioned point-in-time intervals from the primary membership source
+- [ ] Ingest `unliftedq/index-constitution` ticker-change/delisting events into the security master
+- [ ] Implement Tiingo raw/adjusted daily-bar, dividend, and split ingestion
+- [ ] Ingest immutable FMP Basic validation extracts for raw-price, dividend, delisting, and
+      security-metadata cross-checks; never use them to backfill canonical history
+- [ ] Cross-check 50–100 seeded constituent changes against `riazarbi/sp500-scraper` and
+      historical SPY holdings; quarantine unresolved intervals
+- [ ] Reconcile raw/adjusted bars with recorded corporate actions and quarantine failures
 - [ ] Add data-quality suite
-- [ ] Store processed data in Parquet
+- [ ] Store immutable provider extracts and canonical Parquet data with manifests
 
 ## Epic: Strategy
 

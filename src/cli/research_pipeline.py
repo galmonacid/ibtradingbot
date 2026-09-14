@@ -1,4 +1,4 @@
-"""Command-line entry point for the local Phase 1 research baseline."""
+"""Command-line entry point for the local Phase 2 research baseline."""
 
 from __future__ import annotations
 
@@ -14,11 +14,21 @@ from src.research import ResearchError, run_research
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run the synthetic, engineering-only Phase 1 research baseline."
+        description="Run the synthetic, engineering-only Phase 2 research baseline."
     )
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument("--universe", type=Path, required=True)
+    parser.add_argument(
+        "--point-in-time-universe",
+        type=Path,
+        help="Optional dated membership CSV; requires --historical-security-master.",
+    )
+    parser.add_argument(
+        "--historical-security-master",
+        type=Path,
+        help="Historical instrument metadata; required with --point-in-time-universe.",
+    )
     parser.add_argument("--calendar", type=Path, required=True)
     parser.add_argument("--corporate-actions", type=Path, required=True)
     parser.add_argument("--initial-cash", type=float, default=100_000.0)
@@ -42,6 +52,8 @@ def main() -> int:
             args.corporate_actions,
             initial_cash=args.initial_cash,
             run_timestamp=args.run_timestamp,
+            point_in_time_universe_path=args.point_in_time_universe,
+            historical_security_master_path=args.historical_security_master,
         )
     except (ConfigurationError, ResearchError, ValueError) as error:
         logger.error("research_pipeline_failed", extra={"reason": str(error)})

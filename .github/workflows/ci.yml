@@ -13,11 +13,35 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install -e ".[dev]"
+      - run: python -m pip install -e ".[dev,historical-data]"
       - run: pytest
       - run: ruff check .
       - run: mypy src
       - run: python -m build
+      - run: python -m venv /tmp/phase3-wheel
+      - run: /tmp/phase3-wheel/bin/pip install pyarrow dist/*.whl
+      - run: /tmp/phase3-wheel/bin/momentum-sample-pipeline --help
+      - run: /tmp/phase3-wheel/bin/momentum-research-pipeline --help
+      - run: /tmp/phase3-wheel/bin/momentum-validation-pipeline --help
+      - run: /tmp/phase3-wheel/bin/momentum-public-reconstructed --help
+      - run: /tmp/phase3-wheel/bin/momentum-public-daily-prices --help
+      - run: /tmp/phase3-wheel/bin/momentum-historical-producer --help
+      - run: /tmp/phase3-wheel/bin/momentum-historical-build --help
+      - run: python data/sample/generate_phase3_validation_artifact.py --output /tmp/phase3.json
+      - run: >-
+          momentum-validation-pipeline --artifact /tmp/phase3.json
+          --json-output /tmp/phase3-first.json
+          --markdown-output /tmp/phase3-first.md
+      - run: >-
+          momentum-validation-pipeline --artifact /tmp/phase3.json
+          --json-output /tmp/phase3-second.json
+          --markdown-output /tmp/phase3-second.md
+      - run: cmp /tmp/phase3-first.json /tmp/phase3-second.json
+      - run: cmp /tmp/phase3-first.md /tmp/phase3-second.md
+      - run: grep -q "FAIL CLOSED" /tmp/phase3-first.md
+      - run: momentum-validation-pipeline --help
+      - run: momentum-historical-producer --help
+      - run: momentum-historical-build --help
       - run: momentum-sample-pipeline --config config.example.yaml
       - run: >-
           momentum-research-pipeline

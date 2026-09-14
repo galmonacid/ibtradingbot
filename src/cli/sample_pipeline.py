@@ -12,9 +12,7 @@ from src.logging import configure_logging
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Validate the checked-in Phase 0 sample dataset."
-    )
+    parser = argparse.ArgumentParser(description="Validate the checked-in Phase 0 sample dataset.")
     parser.add_argument(
         "--config", type=Path, required=True, help="Path to the YAML configuration."
     )

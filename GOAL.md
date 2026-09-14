@@ -20,8 +20,10 @@ or evidence that the strategy is ready for deployment.
   orders execute at the next available session's adjusted open.
 - Preserve hard invariants now: long-only, no more than five positions, at most
   30% per name, and gross exposure no greater than either the regime ceiling or
-  one minus the cash buffer. Research values are USD; FX bps is a modeled
-  per-side friction rather than an exchange-rate model.
+  one minus the cash buffer at target construction and execution. Close-marked
+  weights can subsequently drift with prices; the cash-only ledger must remain
+  non-negative and below 100% gross. Research values are USD; FX bps is a
+  modeled per-side friction rather than an exchange-rate model.
 - Use explicit, versioned fixed-universe metadata only for engineering
   validation. It cannot substantiate historical performance claims.
 - Use adjusted research prices to handle ordinary corporate actions. A held
@@ -30,35 +32,35 @@ or evidence that the strategy is ready for deployment.
 
 ## Measurable acceptance criteria
 
-- [ ] Ingestion validates canonical daily bars, returns typed deterministic
+- [x] Ingestion validates canonical daily bars, returns typed deterministic
   records, and quarantines invalid rows with explicit quality reasons, including
   duplicates, OHLCV errors, suspicious moves, stale prices, and split-like jumps.
-- [ ] A versioned 30–50-name fixed universe plus SPY has explicit eligibility
+- [x] A versioned 30–50-name fixed universe plus SPY has explicit eligibility
   metadata; as-of filters enforce price, trailing liquidity, history, and
   instrument rules and record every exclusion.
-- [ ] Feature construction implements all required stock, benchmark, breadth,
+- [x] Feature construction implements all required stock, benchmark, breadth,
   and dispersion fields causally, using adjusted prices and no forward-filling.
-- [ ] Ranking applies 1st/99th percentile winsorization, population z-scores,
+- [x] Ranking applies 1st/99th percentile winsorization, population z-scores,
   the exact configured formula, strict price-above-SMA200 eligibility, explicit
   missing-input exclusions, and symbol tie-breaking.
-- [ ] Regime classification implements explicit boundaries and a prior-only
+- [x] Regime classification implements explicit boundaries and a prior-only
   expanding volatility percentile without future information.
-- [ ] Equal-weight targets preserve all hard risk invariants, retain the cash
+- [x] Equal-weight targets preserve all hard risk invariants, retain the cash
   buffer, and produce zero exposure in risk-off.
-- [ ] The engine produces weekly after-close signals, executes strictly at the
+- [x] The engine produces weekly after-close signals, executes strictly at the
   next available session's adjusted open, supports cash and fractional shares,
   sells before buys, handles disappearing holdings explicitly, and exposes a
   deterministic ledger and daily net equity series.
-- [ ] Commission, adverse slippage, and FX friction are configurable, charged
+- [x] Commission, adverse slippage, and FX friction are configurable, charged
   on each executed side, separately reported, and absent on no-change targets.
-- [ ] Reports include all required metrics, aligned SPY/cash comparisons,
+- [x] Reports include all required metrics, aligned SPY/cash comparisons,
   benchmark-relative measures, deterministic null semantics, and provenance.
-- [ ] Tests prove formulas, boundaries, risk properties, cost accounting,
+- [x] Tests prove formulas, boundaries, risk properties, cost accounting,
   next-session timing including holiday gaps, deterministic ties, invalid-input
   behavior, and prefix/future invariance for signals and targets.
-- [ ] One documented local command runs a version-controlled long fixture twice
+- [x] One documented local command runs a version-controlled long fixture twice
   with identical economic results and no network, broker, or live-order action.
-- [ ] Python 3.12 passes install, pytest, ruff, mypy, build, the Phase 0 command,
+- [x] Python 3.12 passes install, pytest, ruff, mypy, build, the Phase 0 command,
   and the Phase 1 command; independent review has no material open finding.
 
 ## Backlog
@@ -73,17 +75,26 @@ or evidence that the strategy is ready for deployment.
 - [x] Implement metrics, comparisons, provenance, report, and Phase 1 CLI.
 - [x] Add a long fixture and unit/property/leakage/regression/end-to-end tests.
 - [x] Update documentation and CI; run all quality and behavior gates.
-- [ ] Complete independent reviews, fix material findings, and reassess scope.
+- [x] Complete independent reviews, fix material findings, and reassess scope.
 
 ## Completed work
 
-- Repository and specification inspection completed on 2026-09-07.
+- Repository and specification inspection completed on 2026-09-07; final
+  requirement-by-requirement audit completed on 2026-09-09.
 - Three independent audits covered Phase 1 scope, repository readiness, and
   leakage/risk/test requirements. Their findings are reflected above.
 - The first implementation pass delivered separate data, feature, strategy,
   portfolio, backtest, metrics, research orchestration, and CLI modules.
 - Behavioral inspection found and fixed cost-induced cash-buffer erosion,
   ineligible-symbol breadth contamination, and a truncated-week scheduling bug.
+- Later independent reviews found and drove fixes for future-sensitive stale
+  detection, missing benchmark/calendar validation, discontinuous fixed-fee
+  sizing, partial-fill concentration breaches, average-cost/FIFO reporting
+  conflicts, compressed feature windows across missing sessions, malformed CSV
+  traceback paths, and implicit disappearing-security recovery.
+- The final engine preflights a complete rebalance before mutation, rejects
+  infeasible fixed-cost targets, reports a primitive order ledger, and derives
+  trade statistics from fee-aware FIFO exit lots.
 
 ## Discovered work / decisions
 
@@ -93,18 +104,36 @@ or evidence that the strategy is ready for deployment.
   universe input rather than infer ISA or listing eligibility from prices.
 - A varying run timestamp prevents whole-report byte identity. Economic payloads
   will be compared separately, and tests can inject a fixed timestamp.
+- Mandatory feature continuity requires a growing complete benchmark-aligned
+  window from 252 sessions through 258 sessions; 258 is the longest Phase 1
+  endpoint/lookback/skip span.
+- Portfolio caps apply to targets and execution-open weights. Daily close marks
+  may drift slightly; the verified fixture remains cash-only and below 100%
+  gross exposure without causal intraday rebalancing.
 
 ## Evidence
 
-- On Python 3.12.14, the first integrated gate passed 39 tests, `ruff check .`,
-  and strict `mypy src` on 2026-09-07.
+- On Python 3.12.14, the final integrated gate passed 64 tests, `ruff check .`,
+  strict `mypy src`, and `git diff --check` on 2026-09-09.
+- `python -m build` produced both the 0.1.0 sdist and wheel. The wheel installed
+  successfully into the Python 3.12 verification environment; its packaged
+  `momentum-sample-pipeline` and `momentum-research-pipeline` console commands
+  both ran successfully.
 - A direct full-fixture run ingested 2,280 bars over 380 sessions with zero
   quarantines, produced 79 completed-week signals and 66 executed order sides,
-  exercised risk-on/neutral/risk-off, and produced all metrics and provenance.
+  exercised risk-on/neutral/risk-off, produced 50 realized FIFO lots, had zero
+  execution issues and non-negative cash, and produced all metrics and provenance.
 - The Memorial Day regression proves a 2024-05-24 close signal executes on the
   next observed session, 2024-05-28. Every trade is strictly after its signal.
 - The integrated regression runs the pipeline twice with a fixed timestamp and
   compares the complete reports for equality.
+- The installed wheel's Phase 1 command was run twice with the same timestamp;
+  both exited zero and emitted byte-identical JSON. Phase 0 also exited zero.
+- Independent accounting rereview reported no remaining material finding after
+  replaying the small-capital failures, 5,000 randomized cost/risk cases, FIFO
+  reconciliation, and multiple hash-seed runs. Causality and acceptance review
+  findings were reproduced, fixed, and covered by regression tests before the
+  final full gate.
 
 ## Blockers
 

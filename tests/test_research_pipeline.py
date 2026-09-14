@@ -56,8 +56,7 @@ def test_trade_metrics_realize_fifo_lots_after_position_top_up() -> None:
 
 def test_weekly_schedule_uses_explicit_calendar_and_omits_partial_final_week() -> None:
     sessions = [
-        datetime.fromisoformat(value).date()
-        for value in ("2024-03-28", "2024-04-01", "2024-04-02")
+        datetime.fromisoformat(value).date() for value in ("2024-03-28", "2024-04-01", "2024-04-02")
     ]
     calendar = TradingCalendar(
         "XNYS",
@@ -102,18 +101,15 @@ def test_end_to_end_fixture_is_deterministic_costed_and_causal() -> None:
             assert weights == {}
 
     trades = first["trades"]
-    assert len(trades) == 66
+    assert len(trades) == 67
     assert all(
-        trade["signal_date"] is None or trade["date"] > trade["signal_date"]
-        for trade in trades
+        trade["signal_date"] is None or trade["date"] > trade["signal_date"] for trade in trades
     )
     memorial_day = [trade for trade in trades if trade["signal_date"] == "2024-05-24"]
     assert memorial_day and {trade["date"] for trade in memorial_day} == {"2024-05-28"}
     assert first["costs"]["total"] > 0.0
     assert first["costs"]["total"] == pytest.approx(
-        first["costs"]["commission"]
-        + first["costs"]["slippage"]
-        + first["costs"]["fx_friction"]
+        first["costs"]["commission"] + first["costs"]["slippage"] + first["costs"]["fx_friction"]
     )
     # Targets and open fills obey 98%; close-marked exposure can drift with prices,
     # but positive cash means the long-only account remains below 100% gross.
@@ -123,7 +119,7 @@ def test_end_to_end_fixture_is_deterministic_costed_and_causal() -> None:
     assert first["metrics"]["spy_buy_and_hold"]["cagr"] is not None
     assert first["metrics"]["cash"]["cagr"] == 0.0
     assert first["metrics"]["benchmark_relative"]["tracking_error"] is not None
-    assert first["provenance"]["strategy_version"] == "phase1-deterministic-v1"
+    assert first["provenance"]["strategy_version"] == "phase2-risk-portfolio-v1"
     assert first["provenance"]["ml_model_version"] == "disabled"
     assert first["provenance"]["run_timestamp_utc"] == "2026-09-07T00:00:00+00:00"
     assert first["provenance"]["calendar_exchange"] == "XNYS"
@@ -131,6 +127,15 @@ def test_end_to_end_fixture_is_deterministic_costed_and_causal() -> None:
     assert first["provenance"]["initial_cash_usd"] == 100_000.0
     assert first["reporting_period"]["start"] == "2024-03-08"
     assert first["equity_curve"][0]["equity"] == 100_000.0
+    assert not first["validation_gate_assessment"]["admissible_deployment_evidence"]
+    stressed = first["comparisons"]["inverse_volatility_stressed_costs"]
+    equal_weight = first["comparisons"]["equal_weight_default_costs"]
+    assert stressed["costs"]["total"] > first["costs"]["total"]
+    assert stressed["final_equity"] <= first["equity_curve"][-1]["equity"]
+    assert equal_weight["metrics"]["number_of_trades"] > 0
+    assert all(
+        signal["sizing"]["expected_volatility"] <= 0.12 + 1e-12 for signal in first["signals"]
+    )
 
 
 def test_cli_emits_json_and_invalid_input_fails_without_traceback(tmp_path: Path) -> None:
@@ -189,9 +194,7 @@ def test_complete_pipeline_is_prefix_invariant(tmp_path: Path) -> None:
     before = run_research(CONFIG, prefix, UNIVERSE, CALENDAR, ACTIONS, run_timestamp=TIMESTAMP)
     after = run_research(CONFIG, DATA, UNIVERSE, CALENDAR, ACTIONS, run_timestamp=TIMESTAMP)
 
-    assert before["signals"] == [
-        signal for signal in after["signals"] if signal["date"] <= cutoff
-    ]
+    assert before["signals"] == [signal for signal in after["signals"] if signal["date"] <= cutoff]
     assert before["trades"] == [trade for trade in after["trades"] if trade["date"] <= cutoff]
     assert before["equity_curve"] == [
         point for point in after["equity_curve"] if point["date"] <= cutoff
@@ -217,3 +220,33 @@ def test_pipeline_rejects_missing_benchmark_and_noncalendar_bar(tmp_path: Path) 
     )
     with pytest.raises(ResearchError, match="absent from the benchmark"):
         run_research(CONFIG, weekend, UNIVERSE, CALENDAR, ACTIONS, run_timestamp=TIMESTAMP)
+
+
+def test_pipeline_applies_point_in_time_membership_and_records_provenance(
+    tmp_path: Path,
+) -> None:
+    rows = UNIVERSE.read_text(encoding="utf-8").splitlines()[1:]
+    candidates = [row.split(",")[1] for row in rows if row.split(",")[1] != "SPY"]
+    membership = tmp_path / "membership.csv"
+    security_master = tmp_path / "security-master.csv"
+    security_master.write_text(
+        "metadata_version," + UNIVERSE.read_text(encoding="utf-8").replace("version,", "", 1),
+        encoding="utf-8",
+    )
+    membership.write_text(
+        "source_version,symbol,effective_from,effective_to\n"
+        + "".join(f"pit-fixture-v1,{symbol},2020-01-01,\n" for symbol in candidates),
+        encoding="utf-8",
+    )
+    report = run_research(
+        CONFIG,
+        DATA,
+        UNIVERSE,
+        CALENDAR,
+        ACTIONS,
+        run_timestamp=TIMESTAMP,
+        point_in_time_universe_path=membership,
+        historical_security_master_path=security_master,
+    )
+    assert report["provenance"]["point_in_time_universe"] is True
+    assert report["provenance"]["universe_version"] == "pit-fixture-v1"

@@ -208,9 +208,7 @@ def _individual_features(series: list[_Bar]) -> list[dict[str, FeatureValue]]:
         for periods in (63, 126, 252):
             values[f"ret_{periods}_skip5"] = _skip_return(adjusted, index, periods)
 
-        moving_averages = {
-            window: _mean(adjusted, index, window) for window in (20, 50, 100, 200)
-        }
+        moving_averages = {window: _mean(adjusted, index, window) for window in (20, 50, 100, 200)}
         for window, average in moving_averages.items():
             values[f"trend_{window}d"] = (
                 None if average is None else bar.adjusted_close / average - 1.0
@@ -225,9 +223,7 @@ def _individual_features(series: list[_Bar]) -> list[dict[str, FeatureValue]]:
             values[f"drawdown_{window}d"] = _drawdown(adjusted, index, window)
 
         median_dollar_volume = (
-            None
-            if index + 1 < 20
-            else statistics.median(raw_dollar_volume[index - 19 : index + 1])
+            None if index + 1 < 20 else statistics.median(raw_dollar_volume[index - 19 : index + 1])
         )
         median_volume = (
             None if index + 1 < 20 else statistics.median(volumes[index - 19 : index + 1])
@@ -244,9 +240,7 @@ def _individual_features(series: list[_Bar]) -> list[dict[str, FeatureValue]]:
         )
         values["true_range"] = true_range
         atr14 = _mean(true_ranges, index, 14)
-        values["atr14_over_close"] = (
-            None if atr14 is None else atr14 / bar.adjusted_close
-        )
+        values["atr14_over_close"] = None if atr14 is None else atr14 / bar.adjusted_close
         # Internal values make the exact trend eligibility rule inspectable.
         values["adjusted_close"] = bar.adjusted_close
         values["sma_200d"] = moving_averages[200]
@@ -284,9 +278,7 @@ def build_features(
             by_key[(bar.date, symbol)] = values
             by_date[bar.date].append((symbol, values))
 
-    benchmark_values = {
-        key[0]: values for key, values in by_key.items() if key[1] == benchmark
-    }
+    benchmark_values = {key[0]: values for key, values in by_key.items() if key[1] == benchmark}
     for session in sorted(by_date):
         eligible_symbols = (
             None
@@ -296,8 +288,7 @@ def build_features(
         stock_values = [
             values
             for symbol, values in by_date[session]
-            if symbol != benchmark
-            and (eligible_symbols is None or symbol in eligible_symbols)
+            if symbol != benchmark and (eligible_symbols is None or symbol in eligible_symbols)
         ]
         market: dict[str, FeatureValue] = {}
         spy = benchmark_values.get(session)
@@ -307,9 +298,7 @@ def build_features(
             market[f"spy_trend_{window}d"] = None if spy is None else spy[f"trend_{window}d"]
         market["spy_vol_20d"] = None if spy is None else spy["vol_20d"]
         for window in (63, 252):
-            market[f"spy_drawdown_{window}d"] = (
-                None if spy is None else spy[f"drawdown_{window}d"]
-            )
+            market[f"spy_drawdown_{window}d"] = None if spy is None else spy[f"drawdown_{window}d"]
 
         for window in (50, 200):
             trends = [values[f"trend_{window}d"] for values in stock_values]
@@ -340,6 +329,5 @@ def build_features(
             values.update(market)
 
     return tuple(
-        FeatureRow(session, symbol, by_key[(session, symbol)])
-        for session, symbol in sorted(by_key)
+        FeatureRow(session, symbol, by_key[(session, symbol)]) for session, symbol in sorted(by_key)
     )

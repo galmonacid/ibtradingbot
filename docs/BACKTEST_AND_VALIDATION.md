@@ -78,6 +78,18 @@ The strategy must remain viable under the stress scenario.
 
 Use the longest clean point-in-time dataset reasonably available.
 
+The Phase 3 initial dataset uses version-pinned open-source membership records plus Tiingo:
+`chinobing/historical_sp500_constituents` provides primary dated S&P 500 membership;
+`unliftedq/index-constitution` provides ticker-change and delisting events; and
+`riazarbi/sp500-scraper` plus historical SPY holdings provide independent membership QA. Tiingo
+provides raw/adjusted bars and corporate actions. Its manifest and independent 50–100-event
+constituent-change audit are required alongside the normal completeness checks. A licensed
+CRSP/WRDS dataset is not required to begin or complete this initial validation route.
+
+Available FMP Basic price, dividend, delisting, and security-metadata endpoints are retained as
+secondary validation evidence. Disagreements must be reconciled or quarantined; FMP must not fill
+missing Tiingo data or alter the pinned membership/identity history.
+
 Preferred minimum:
 
 ```text
@@ -320,6 +332,11 @@ Sharpe
 ```
 
 Reject if the strategy's favorable result depends on an implausibly narrow path.
+
+The Phase 3 lower-confidence viability gates use the configured worst result across daily-
+block and complete-regime-run bootstraps. Defaults require 5th-percentile CAGR >= 0%,
+5th-percentile Sharpe >= 0, and 95th-percentile maximum drawdown <= 25%. These deliberately
+looser tail thresholds supplement rather than replace the point-estimate deployment gates.
 
 ---
 
