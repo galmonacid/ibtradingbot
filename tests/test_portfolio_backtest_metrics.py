@@ -1,4 +1,5 @@
 import math
+from dataclasses import FrozenInstanceError, replace
 from datetime import date
 
 import pytest
@@ -71,6 +72,60 @@ def test_backtest_executes_next_session_with_costs_and_never_negative_cash() -> 
     assert fill_point.cash / fill_point.equity >= 0.02
     assert result.equity_curve[-1].equity < 1_000.0
     assert sum(trade.total_cost for trade in result.trades) > 0.0
+
+    trace = result.execution_trace
+    assert len(trace.decisions) == 1
+    assert trace.decisions[0].status == "applied"
+    assert tuple(row.security_id for row in trace.decisions[0].target_weights) == ("AAA", "BBB")
+    assert len(trace.order_intents) == len(trace.fills) == 2
+    assert {row.order_id for row in trace.order_intents} == {row.order_id for row in trace.fills}
+    assert not trace.missing_open_dispositions
+    assert len(trace.sha256) == 64
+    with pytest.raises(FrozenInstanceError):
+        trace.sha256 = "0" * 64  # type: ignore[misc]
+    with pytest.raises(ValueError, match="digest"):
+        replace(trace, sha256="0" * 64)
+
+
+def test_execution_trace_is_semantically_deterministic_and_records_no_op_and_no_next() -> None:
+    bars = [bar(day, symbol, 100.0) for day in (2, 3, 4) for symbol in ("AAA", "BBB")]
+    targets = {
+        date(2024, 1, 2): {"BBB": 0.2, "AAA": 0.3},
+        date(2024, 1, 3): {"AAA": 0.3, "BBB": 0.2},
+        date(2024, 1, 4): {},
+    }
+    first = run_backtest(bars, targets, costs=CostModel(0.0, 0.0, 0.0))
+    second = run_backtest(
+        bars,
+        {
+            day: dict(reversed(tuple(weights.items())))
+            for day, weights in reversed(tuple(targets.items()))
+        },
+        costs=CostModel(0.0, 0.0, 0.0),
+    )
+
+    assert first.execution_trace == second.execution_trace
+    assert [row.status for row in first.execution_trace.decisions] == [
+        "applied",
+        "no_op",
+        "no_next_session",
+    ]
+    assert all(isinstance(row.target_weights, tuple) for row in first.execution_trace.decisions)
+
+
+def test_execution_trace_records_superseded_decisions() -> None:
+    bars = [bar(day, "AAA", 100.0) for day in (3, 4)]
+    result = run_backtest(
+        bars,
+        {
+            date(2024, 1, 1): {"AAA": 0.2},
+            date(2024, 1, 2): {"AAA": 0.3},
+        },
+        costs=CostModel(0.0, 0.0, 0.0),
+    )
+
+    assert [row.status for row in result.execution_trace.decisions] == ["superseded", "applied"]
+    assert result.execution_trace.decisions[0].execution_date == date(2024, 1, 3)
 
 
 @pytest.mark.parametrize(
@@ -166,6 +221,13 @@ def test_adjusted_open_and_disappearing_symbol_liquidation_are_explicit() -> Non
     assert result.trades[-1].reference_price == pytest.approx(40.0)
     assert result.trades[-1].total_cost == 0.0
     assert result.final_positions == {}
+    settlement = result.execution_trace.corporate_action_settlements
+    assert len(settlement) == 1
+    assert settlement[0].security_id == "AAA"
+    assert settlement[0].proceeds == pytest.approx(result.trades[-1].gross_notional)
+    assert all(
+        fill.order_id != settlement[0].settlement_id for fill in result.execution_trace.fills
+    )
 
 
 def test_missing_held_bar_without_delisting_fails_closed() -> None:
@@ -183,6 +245,13 @@ def test_missing_target_open_is_recorded_and_never_fabricated() -> None:
     assert result.trades == ()
     assert len(result.execution_issues) == 1
     assert result.execution_issues[0].reason == "missing_open"
+    trace = result.execution_trace
+    assert len(trace.decisions) == len(trace.order_intents) == 1
+    assert not trace.fills
+    assert len(trace.missing_open_dispositions) == 1
+    assert trace.order_intents[0].requested_shares is None
+    assert trace.order_intents[0].reference_price is None
+    assert trace.order_intents[0].order_id == trace.missing_open_dispositions[0].order_id
 
 
 @pytest.mark.parametrize(
@@ -352,6 +421,35 @@ def test_hard_drawdown_liquidates_next_session_and_remains_latched() -> None:
         point.high_water_mark >= result.equity_curve[index - 1].high_water_mark
         for index, point in enumerate(result.equity_curve[1:], start=1)
     )
+    hard_decision = next(
+        row for row in result.execution_trace.decisions if row.reason == "drawdown_hard"
+    )
+    assert hard_decision.signal_date == date(2024, 1, 3)
+    assert hard_decision.execution_date == date(2024, 1, 4)
+    assert hard_decision.status == "applied"
+
+
+def test_execution_trace_records_unexecutable_final_session_risk_decision() -> None:
+    symbols = ("AAA", "BBB", "CCC", "DDD")
+    bars = [
+        PriceBar(date(2024, 1, day), symbol, price, price, price)
+        for day, price in ((1, 100.0), (2, 100.0), (3, 80.0))
+        for symbol in symbols
+    ]
+    result = run_backtest(
+        bars,
+        {date(2024, 1, 1): dict.fromkeys(symbols, 0.245)},
+        costs=CostModel(0.0, 0.0, 0.0),
+        soft_drawdown_threshold=0.10,
+        hard_drawdown_threshold=0.15,
+    )
+
+    final_decision = next(
+        row for row in result.execution_trace.decisions if row.reason == "drawdown_hard"
+    )
+    assert final_decision.signal_date == date(2024, 1, 3)
+    assert final_decision.execution_date is None
+    assert final_decision.status == "no_next_session"
 
 
 def test_soft_drawdown_queues_risk_reduction_without_a_strategy_signal() -> None:

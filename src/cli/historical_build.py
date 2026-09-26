@@ -9,21 +9,18 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from src.data.execution_audit import (
-    ExecutionAuditRecord,
-    ExecutionAuditReport,
-    audit_historical_executions,
-)
 from src.data.fmp_transform import transform_fmp_manifest
+from src.data.git_source import verify_git_source_snapshot
 from src.data.membership_audit import derive_constituent_changes
 from src.data.semantic_certification import CoverageExclusion, TerminalTreatment
 from src.data.source_adapters import (
-    transform_audit_evidence_source,
     transform_identity_source,
     transform_membership_source,
+    transform_riazarbi_audit_source,
 )
+from src.data.source_native_qa import ISHARES_IVV_ROLE, WIKIPEDIA_ROLE
 from src.data.tiingo_transform import transform_tiingo_source
-from src.data.trusted_historical import DatedSecurityIdentity, verify_source_snapshot
+from src.data.trusted_historical import DatedSecurityIdentity
 from src.data.trusted_producer import build_trusted_historical_dataset
 
 
@@ -100,55 +97,28 @@ def _terminal(path: Path | None) -> tuple[TerminalTreatment, ...]:
         raise HistoricalBuildInputError("terminal treatments contain invalid records") from error
 
 
-def _execution(path: Path, sessions: tuple[date, ...]) -> ExecutionAuditReport:
-    rows = _json_list(path, "execution audit")
-    fields = {
-        "decision_session",
-        "fill_session",
-        "security_id",
-        "notional",
-        "fill_price",
-        "baseline_commission",
-        "stressed_commission",
-        "baseline_slippage_bps",
-        "stressed_slippage_bps",
-    }
-    if any(set(row) != fields for row in rows):
-        raise HistoricalBuildInputError("execution audit contains invalid fields")
-    try:
-        records = tuple(
-            ExecutionAuditRecord(
-                date.fromisoformat(str(row["decision_session"])),
-                date.fromisoformat(str(row["fill_session"])),
-                str(row["security_id"]),
-                float(row["notional"]),
-                float(row["fill_price"]),
-                float(row["baseline_commission"]),
-                float(row["stressed_commission"]),
-                float(row["baseline_slippage_bps"]),
-                float(row["stressed_slippage_bps"]),
-            )
-            for row in rows
-        )
-    except (KeyError, TypeError, ValueError) as error:
-        raise HistoricalBuildInputError("execution audit contains invalid records") from error
-    return audit_historical_executions(sessions, records)
-
-
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Build canonical Phase 3 Parquet and trusted evidence from local snapshots."
+        description="Build canonical Phase 3 Parquet and dataset evidence from local snapshots."
     )
     for role in ("membership", "identity", "scraper-qa", "holdings-qa"):
         parser.add_argument(f"--{role}-manifest", type=Path, required=True)
         parser.add_argument(f"--{role}-root", type=Path, required=True)
         parser.add_argument(f"--{role}-file", required=True)
+    parser.add_argument(
+        "--scraper-qa-kind", choices=("riazarbi-wikipedia",), default="riazarbi-wikipedia"
+    )
+    parser.add_argument("--holdings-qa-kind", choices=("riazarbi-ivv",), default="riazarbi-ivv")
     parser.add_argument("--tiingo-manifest", type=Path, required=True)
     parser.add_argument("--tiingo-root", type=Path, required=True)
-    parser.add_argument("--fmp-manifest", type=Path, required=True)
-    parser.add_argument("--fmp-root", type=Path, required=True)
-    parser.add_argument("--sessions", type=Path, required=True)
-    parser.add_argument("--execution-audit", type=Path, required=True)
+    parser.add_argument("--tiingo-request-plan", type=Path, required=True)
+    parser.add_argument("--fmp-manifest", type=Path)
+    parser.add_argument("--fmp-root", type=Path)
+    parser.add_argument(
+        "--sessions",
+        type=Path,
+        help="Optional expected session list; otherwise derived from verified benchmark bars.",
+    )
     parser.add_argument("--exclusions", type=Path)
     parser.add_argument("--terminal-treatments", type=Path)
     parser.add_argument("--coverage-start", type=date.fromisoformat, required=True)
@@ -156,13 +126,16 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-directory", type=Path, required=True)
     parser.add_argument("--audit-sample-size", type=int, default=75)
     parser.add_argument("--audit-seed", type=int, default=20260913)
+    parser.add_argument("--minimum-investable-constituents", type=int, default=400)
     return parser
 
 
 def main() -> int:
     args = _parser().parse_args()
     try:
-        membership_snapshot = verify_source_snapshot(args.membership_manifest, args.membership_root)
+        membership_snapshot = verify_git_source_snapshot(
+            args.membership_manifest, args.membership_root
+        )
         membership = transform_membership_source(
             membership_snapshot, args.membership_root, args.membership_file
         )
@@ -172,37 +145,68 @@ def main() -> int:
                 | {args.benchmark_symbol}
             )
         )
-        identity_snapshot = verify_source_snapshot(args.identity_manifest, args.identity_root)
+        identity_snapshot = verify_git_source_snapshot(args.identity_manifest, args.identity_root)
         identity = transform_identity_source(
             identity_snapshot,
             args.identity_root,
             args.identity_file,
             coverage_start=args.coverage_start,
             known_symbols=known_symbols,
+            preserve_symbol_reuse=True,
         )
-        qa_sources = tuple(
-            transform_audit_evidence_source(verify_source_snapshot(manifest, root), root, relative)
-            for manifest, root, relative in (
-                (args.scraper_qa_manifest, args.scraper_qa_root, args.scraper_qa_file),
-                (args.holdings_qa_manifest, args.holdings_qa_root, args.holdings_qa_file),
+        scraper_snapshot = verify_git_source_snapshot(
+            args.scraper_qa_manifest, args.scraper_qa_root
+        )
+        scraper = transform_riazarbi_audit_source(
+            scraper_snapshot,
+            args.scraper_qa_root,
+            args.scraper_qa_file,
+            source_role=WIKIPEDIA_ROLE,
+        )
+        holdings_snapshot = verify_git_source_snapshot(
+            args.holdings_qa_manifest, args.holdings_qa_root
+        )
+        holdings = transform_riazarbi_audit_source(
+            holdings_snapshot,
+            args.holdings_qa_root,
+            args.holdings_qa_file,
+            source_role=ISHARES_IVV_ROLE,
+        )
+        qa_sources = (scraper, holdings)
+        tiingo = transform_tiingo_source(
+            args.tiingo_manifest, args.tiingo_root, args.tiingo_request_plan
+        )
+        if (args.fmp_manifest is None) != (args.fmp_root is None):
+            raise HistoricalBuildInputError(
+                "optional FMP manifest and root must be supplied together"
             )
+        fmp = (
+            transform_fmp_manifest(
+                args.fmp_manifest, args.fmp_root, identities=identity.parsed.identity_intervals
+            )
+            if args.fmp_manifest is not None and args.fmp_root is not None
+            else None
         )
-        tiingo = transform_tiingo_source(args.tiingo_manifest, args.tiingo_root)
-        fmp = transform_fmp_manifest(
-            args.fmp_manifest, args.fmp_root, identities=identity.parsed.identity_intervals
+        identities = DatedSecurityIdentity(identity.parsed.identity_intervals)
+        benchmark_id = identities.resolve(args.benchmark_symbol, args.coverage_start)
+        benchmark_sessions = tuple(
+            sorted({row.date for row in tiingo.bars if row.security_id == benchmark_id})
         )
-        sessions = _sessions(args.sessions)
-        benchmark_id = DatedSecurityIdentity(identity.parsed.identity_intervals).resolve(
-            args.benchmark_symbol, sessions[0]
-        )
+        if not benchmark_sessions:
+            raise HistoricalBuildInputError("verified Tiingo input has no benchmark sessions")
+        sessions = _sessions(args.sessions) if args.sessions is not None else benchmark_sessions
+        if sessions != benchmark_sessions:
+            raise HistoricalBuildInputError(
+                "supplied sessions do not exactly match verified Tiingo benchmark bars"
+            )
         changes = derive_constituent_changes(
-            membership.memberships, DatedSecurityIdentity(identity.parsed.identity_intervals)
+            membership.memberships, identities
         )
         result = build_trusted_historical_dataset(
             args.output_directory,
             membership_source=membership,
             identity_source=identity,
-            qa_evidence_sources=qa_sources,  # type: ignore[arg-type]
+            qa_evidence_sources=qa_sources,
             tiingo_source=tiingo,
             fmp_source=fmp,
             sessions=sessions,
@@ -213,7 +217,7 @@ def main() -> int:
             exclusions=_exclusions(args.exclusions),
             terminal_treatments=_terminal(args.terminal_treatments),
             fmp_quarantines=(),
-            execution_audit=_execution(args.execution_audit, sessions),
+            minimum_investable_constituents=args.minimum_investable_constituents,
         )
     except (OSError, ValueError, KeyError, TypeError) as error:
         print(f"historical build failed: {error}", file=sys.stderr)
@@ -222,7 +226,8 @@ def main() -> int:
         json.dumps(
             {
                 "canonical_manifest": str(result.canonical.manifest_path),
-                "producer_evidence": str(result.evidence_manifest_path),
+                "dataset_evidence": str(result.dataset_evidence_manifest_path),
+                "universe_policy": str(result.universe_policy_path),
                 "deployment_admissible": False,
                 "paper_execution_permitted": False,
             },

@@ -27,6 +27,8 @@ jobs:
       - run: /tmp/phase3-wheel/bin/momentum-public-daily-prices --help
       - run: /tmp/phase3-wheel/bin/momentum-historical-producer --help
       - run: /tmp/phase3-wheel/bin/momentum-historical-build --help
+      - run: /tmp/phase3-wheel/bin/momentum-git-source-snapshot --help
+      - run: /tmp/phase3-wheel/bin/momentum-tiingo-plan --help
       - run: python data/sample/generate_phase3_validation_artifact.py --output /tmp/phase3.json
       - run: >-
           momentum-validation-pipeline --artifact /tmp/phase3.json

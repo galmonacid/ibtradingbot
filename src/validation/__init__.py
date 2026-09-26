@@ -35,6 +35,13 @@ from src.validation.gates import (
     GateStatus,
     assess_deployment_gates,
 )
+from src.validation.provenance import (
+    ValidationProvenanceError,
+    ValidationRunIdentity,
+    cost_model_sha256,
+    create_validation_run_identity,
+    session_list_sha256,
+)
 from src.validation.report import (
     AblationSummary,
     BootstrapSummary,
@@ -62,10 +69,10 @@ from src.validation.walk_forward import (
 )
 from src.validation.workflow import (
     RealizedTradeEvidence,
-    TrustedProducerEvidence,
+    TrustedDatasetEvidence,
     ValidationWorkflowResult,
     WorkflowEvidence,
-    issue_trusted_producer_evidence,
+    issue_trusted_dataset_evidence,
     return_metrics,
     run_validation_workflow,
 )
@@ -96,6 +103,8 @@ __all__ = [
     "BootstrapSummary",
     "AblationSummary",
     "ValidationReport",
+    "ValidationProvenanceError",
+    "ValidationRunIdentity",
     "ParameterSet",
     "PlateauSelection",
     "ReturnMetricDistributions",
@@ -105,16 +114,19 @@ __all__ = [
     "WalkForwardWindow",
     "ValidationWorkflowResult",
     "RealizedTradeEvidence",
-    "TrustedProducerEvidence",
-    "issue_trusted_producer_evidence",
+    "TrustedDatasetEvidence",
+    "issue_trusted_dataset_evidence",
     "WorkflowEvidence",
     "assess_deployment_gates",
     "bootstrap_validation",
     "build_expanding_windows",
     "circular_block_samples",
+    "cost_model_sha256",
+    "create_validation_run_identity",
     "parameter_grid",
     "regime_block_samples",
     "run_validation_workflow",
+    "session_list_sha256",
     "return_metrics",
     "run_walk_forward_selection",
     "run_ablation_analysis",

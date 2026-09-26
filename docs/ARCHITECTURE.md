@@ -228,7 +228,8 @@ Parquet:
 For Phase 3, preserve a three-layer historical-data lineage: immutable, commit-pinned snapshots of
 `chinobing/historical_sp500_constituents` for primary S&P 500 membership,
 `unliftedq/index-constitution` for ticker/delisting events, and `riazarbi/sp500-scraper` plus
-historical SPY holdings for QA; immutable Tiingo extracts for bars, dividends, and splits; and
+its historical iShares IVV holdings for QA; immutable Tiingo extracts for bars, dividends, and
+splits; and
 derived canonical security-master, membership-interval, and Parquet datasets. A manifest links the
 layers by repository URL/commit SHA, file hashes, retrieval parameters, provider metadata,
 transformation version, and data-quality/audit results. Analytics reads only canonical data; it must

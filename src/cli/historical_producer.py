@@ -6,7 +6,7 @@ import argparse
 import json
 import os
 import sys
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from src.data.tiingo import (
@@ -59,6 +59,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--licence", required=True, help="Reviewed Tiingo licence/terms label")
     parser.add_argument("--minimum-interval-seconds", type=float, default=1.0)
     parser.add_argument("--maximum-attempts", type=int, default=3)
+    parser.add_argument("--timeout-seconds", type=float, default=30.0)
     parser.add_argument("--retrieved-at", help="Aware ISO timestamp; defaults to current UTC")
     return parser
 
@@ -66,13 +67,13 @@ def _parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = _parser().parse_args()
     try:
-        when = datetime.fromisoformat(args.retrieved_at) if args.retrieved_at else datetime.now(UTC)
+        when = datetime.fromisoformat(args.retrieved_at) if args.retrieved_at else None
         token = os.environ.get(args.token_environment, "")
         result = acquire_tiingo_extracts(
             _requests(args.request_plan),
             args.output_directory,
             token=token,
-            transport=UrlLibTiingoTransport(),
+            transport=UrlLibTiingoTransport(timeout_seconds=args.timeout_seconds),
             plan=args.plan,
             api_version=args.api_version,
             licence=args.licence,

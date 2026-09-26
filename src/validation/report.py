@@ -89,10 +89,21 @@ def _named_values(values: NamedValues) -> dict[str, Scalar]:
     return dict(values)
 
 
+def _stable_json_numbers(value: object) -> object:
+    """Canonicalize insignificant platform-level floating-point noise."""
+    if isinstance(value, float):
+        return float(f"{value:.12g}")
+    if isinstance(value, dict):
+        return {key: _stable_json_numbers(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_stable_json_numbers(item) for item in value]
+    return value
+
+
 def report_as_dict(report: ValidationReport) -> dict[str, object]:
     """Convert a report to a JSON-ready structure with stable field names."""
 
-    return {
+    payload = {
         "title": report.title,
         "decision": {
             "ready_for_paper_trading": (
@@ -140,6 +151,10 @@ def report_as_dict(report: ValidationReport) -> dict[str, object]:
         ],
         "limitations": list(report.limitations),
     }
+    normalized = _stable_json_numbers(payload)
+    if not isinstance(normalized, dict):  # pragma: no cover - structural invariant
+        raise TypeError("validation report must normalize to an object")
+    return normalized
 
 
 def _values_table(values: NamedValues) -> list[str]:

@@ -279,8 +279,14 @@ def _validate(values: dict[str, Any]) -> None:
         raise ConfigurationError("strategy.rank_hysteresis_multiplier must remain 2")
 
     universe = _require_mapping(values["universe"], "universe")
-    if universe.get("source") not in {"fixed_seed", "public_reconstructed"}:
-        raise ConfigurationError("universe.source must be fixed_seed or public_reconstructed")
+    if universe.get("source") not in {
+        "fixed_seed",
+        "public_reconstructed",
+        "trusted_canonical",
+    }:
+        raise ConfigurationError(
+            "universe.source must be fixed_seed, public_reconstructed, or trusted_canonical"
+        )
     for key in ("version", "benchmark"):
         if not isinstance(universe.get(key), str) or not universe[key].strip():
             raise ConfigurationError(f"universe.{key} must be a non-empty string")

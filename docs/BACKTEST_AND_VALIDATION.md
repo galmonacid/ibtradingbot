@@ -1,5 +1,15 @@
 # Backtest and Validation Specification
 
+## Version scope
+
+The existing engine conventions, V1 grids and mandatory thresholds below remain the
+Phase 1–3 reference. The proposed [V2 strategy](QUANT_SPEC.md) adds a fixed candidate,
+explicit sensitivity criteria, GBP small-account qualification and a freeze-before-test
+protocol. Development implementation now has a separate V2 command; qualification
+remains blocked (see PHASE3_V2_IMPLEMENTATION.md). All existing mandatory gates remain;
+observed V1 test dates cannot become fresh V2 OOS evidence. V2's monthly timing and
+sensitivity contract supersede the V1 weekly/grid examples only for that new version.
+
 ## 1. Principle
 
 A strategy is not accepted because it has a high historical CAGR.
@@ -81,7 +91,8 @@ Use the longest clean point-in-time dataset reasonably available.
 The Phase 3 initial dataset uses version-pinned open-source membership records plus Tiingo:
 `chinobing/historical_sp500_constituents` provides primary dated S&P 500 membership;
 `unliftedq/index-constitution` provides ticker-change and delisting events; and
-`riazarbi/sp500-scraper` plus historical SPY holdings provide independent membership QA. Tiingo
+The Wikipedia and historical iShares IVV streams in `riazarbi/sp500-scraper` provide membership
+QA from one pinned repository. Tiingo
 provides raw/adjusted bars and corporate actions. Its manifest and independent 50–100-event
 constituent-change audit are required alongside the normal completeness checks. A licensed
 CRSP/WRDS dataset is not required to begin or complete this initial validation route.
@@ -162,7 +173,9 @@ because the target horizon is 20 days.
 
 Optimize on validation data only.
 
-Use broad grids.
+Use the predeclared broad one-axis-at-a-time grid around the production baseline. Every
+configured axis is evaluated, but these results are not represented as a full Cartesian
+interaction search.
 
 Example:
 
@@ -230,7 +243,7 @@ The bot does not need to beat SPY every year.
 
 ## 9. Mandatory deployment gates
 
-The deterministic V1 may proceed to paper trading only if:
+Any deterministic candidate, including V2, may proceed to paper trading only if:
 
 ### Return
 

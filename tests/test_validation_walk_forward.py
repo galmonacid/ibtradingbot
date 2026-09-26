@@ -2,6 +2,7 @@ from datetime import date, timedelta
 
 import pytest
 
+from src.validation.native_workflow import _apply_trading_session_embargo
 from src.validation.walk_forward import (
     WalkForwardError,
     WalkForwardWindow,
@@ -31,6 +32,19 @@ def test_expanding_windows_are_chronological_and_use_documented_defaults() -> No
 def test_incomplete_final_test_window_is_not_emitted() -> None:
     sessions = _daily_sessions(date(2007, 1, 1), 10 * 365 + 100)
     assert build_expanding_windows(sessions, verified_complete_through=sessions[-1]) == ()
+
+
+def test_embargo_removes_exact_trading_sessions_not_calendar_days() -> None:
+    window = WalkForwardWindow(
+        0,
+        (date(2020, 1, 2),),
+        (date(2020, 1, 3), date(2020, 1, 6), date(2020, 1, 10)),
+        (date(2020, 1, 13),),
+    )
+    result = _apply_trading_session_embargo((window,), 2)
+    assert result[0].validation == (date(2020, 1, 3),)
+    with pytest.raises(ValueError, match="consumes"):
+        _apply_trading_session_embargo((window,), 3)
 
 
 def test_stitching_keeps_earliest_fold_for_overlapping_test_dates() -> None:

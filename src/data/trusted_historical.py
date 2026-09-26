@@ -60,6 +60,7 @@ class VerifiedSourceSnapshot:
     retrieved_at: datetime
     files: tuple[VerifiedSourceFile, ...]
     manifest_sha256: str
+    checkout_verified: bool
     _attestation: object = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -143,6 +144,7 @@ def verify_source_snapshot(manifest_path: Path, snapshot_root: Path) -> Verified
         retrieved_at,
         tuple(sorted(verified, key=lambda item: item.path)),
         hashlib.sha256(manifest_bytes).hexdigest(),
+        False,
         _VERIFIED_SOURCE_ATTESTATION,
     )
 
@@ -218,6 +220,44 @@ class DatedSecurityIdentity:
             )
         return matches[0]
 
+    def resolve_snapshot_symbol(self, symbol: str, as_of: date) -> str:
+        """Resolve a symbol recorded by an end-of-period membership snapshot.
+
+        The primary reconstruction sometimes labels the final pre-removal snapshot with the
+        removal date or a later observation date before the next source snapshot. Normal
+        point-in-time resolution stays half-open; this narrower adapter maps a stale snapshot
+        symbol to its most recently ended identity only when no active identity exists.
+        """
+        matches = [
+            interval.security_id
+            for interval in self._intervals
+            if interval.symbol == symbol and interval.contains(as_of)
+        ]
+        if not matches:
+            ended = [
+                interval
+                for interval in self._intervals
+                if interval.symbol == symbol
+                and interval.effective_to is not None
+                and interval.effective_to <= as_of
+            ]
+            if ended:
+                latest_end = max(
+                    interval.effective_to
+                    for interval in ended
+                    if interval.effective_to is not None
+                )
+                matches = [
+                    interval.security_id
+                    for interval in ended
+                    if interval.effective_to == latest_end
+                ]
+        if len(matches) != 1:
+            raise TrustedHistoricalError(
+                f"symbol {symbol} has no unambiguous snapshot identity on {as_of.isoformat()}"
+            )
+        return matches[0]
+
 
 @dataclass(frozen=True, order=True)
 class MembershipSnapshot:
@@ -259,7 +299,10 @@ def build_security_membership_intervals(
     active: dict[str, date] = {}
     rows: list[SecurityMembershipInterval] = []
     for snapshot in ordered:
-        resolved = tuple(identities.resolve(symbol, snapshot.as_of) for symbol in snapshot.symbols)
+        resolved = tuple(
+            identities.resolve_snapshot_symbol(symbol, snapshot.as_of)
+            for symbol in snapshot.symbols
+        )
         if len(resolved) != len(set(resolved)):
             raise TrustedHistoricalError(
                 f"multiple member symbols resolve to one security on {snapshot.as_of.isoformat()}"

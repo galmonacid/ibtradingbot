@@ -30,12 +30,35 @@ def test_parses_fja_membership_snapshots_strictly(tmp_path: Path) -> None:
     assert result[1].symbols == ("BBB", "CCC")
 
 
+def test_known_primary_annotation_is_normalized_without_creating_an_event(tmp_path: Path) -> None:
+    path = tmp_path / "membership.csv"
+    path.write_text(
+        'date,tickers\n2023-12-30,"AAA,RVTY"\n'
+        '2023-12-31,"AAA,RVTY (Previously PKI)"\n'
+        '2024-01-01,"AAA,RVTY"\n',
+        encoding="utf-8",
+    )
+    result = parse_sp500_membership_snapshots(path, minimum_members=2, maximum_members=2)
+    assert all(snapshot.symbols == ("AAA", "RVTY") for snapshot in result)
+
+
+def test_same_day_primary_transitions_use_final_after_close_snapshot(tmp_path: Path) -> None:
+    path = tmp_path / "membership.csv"
+    path.write_text(
+        'date,tickers\n2024-01-01,"AAA,BBB"\n2024-01-02,"AAA,CCC"\n2024-01-02,"AAA,DDD"\n',
+        encoding="utf-8",
+    )
+    result = parse_sp500_membership_snapshots(path, minimum_members=2, maximum_members=2)
+    assert tuple(snapshot.as_of for snapshot in result) == (date(2024, 1, 1), date(2024, 1, 2))
+    assert result[-1].symbols == ("AAA", "DDD")
+
+
 @pytest.mark.parametrize(
     ("content", "message"),
     [
         ('Date,tickers\n2020-01-02,"AAA,BBB"\n', "unsupported membership schema"),
         ('date,tickers\n2020-01-02,"AAA,AAA"\n', "duplicate ticker"),
-        ('date,tickers\n2020-02-01,"AAA,BBB"\n2020-01-01,"AAA,BBB"\n', "increasing"),
+        ('date,tickers\n2020-02-01,"AAA,BBB"\n2020-01-01,"AAA,BBB"\n', "non-decreasing"),
         ('date,tickers\n2020-01-02,"aaa,BBB"\n', "canonical US ticker"),
         ('date,tickers\n2020-01-02,"AAA"\n', "count outside"),
     ],
@@ -74,6 +97,44 @@ def test_parses_events_into_changes_delistings_and_identity_intervals(tmp_path: 
     )
 
 
+def test_temporal_identity_mode_preserves_successor_symbol_pre_history(tmp_path: Path) -> None:
+    path = tmp_path / "us.csv"
+    path.write_text(
+        EVENT_HEADER
+        + "\n2014-12-03,ticker_change,WLP,ANTM,WellPoint,Anthem,https://example/a,rename\n",
+        encoding="utf-8",
+    )
+    result = parse_index_constitution_events(
+        path,
+        coverage_start=date(2000, 1, 1),
+        known_symbols=("WLP", "ANTM"),
+        preserve_symbol_reuse=True,
+    )
+    anthems = [row for row in result.identity_intervals if row.symbol == "ANTM"]
+    wlp = next(row for row in result.identity_intervals if row.symbol == "WLP")
+
+    assert len(anthems) == 2
+    assert anthems[0].security_id != wlp.security_id
+    assert anthems[0].effective_to == date(2014, 12, 3)
+    assert anthems[1].security_id == wlp.security_id
+    assert anthems[1].effective_from == date(2014, 12, 3)
+
+
+def test_event_adapter_canonically_sorts_upstream_append_order(tmp_path: Path) -> None:
+    path = tmp_path / "us.csv"
+    path.write_text(
+        EVENT_HEADER
+        + "\n2021-01-01,delisting,C,,C,,https://example/c,n"
+        + "\n2020-01-01,delisting,B,,B,,https://example/b,n\n",
+        encoding="utf-8",
+    )
+    result = parse_index_constitution_events(path, coverage_start=date(2010, 1, 1))
+    assert tuple(event.event_date for event in result.events) == (
+        date(2020, 1, 1),
+        date(2021, 1, 1),
+    )
+
+
 @pytest.mark.parametrize(
     ("rows", "message"),
     [
@@ -83,9 +144,9 @@ def test_parses_events_into_changes_delistings_and_identity_intervals(tmp_path: 
         ),
         (
             EVENT_HEADER
-            + "\n2021-01-01,ticker_change,A,B,A,B,https://example/a,n"
+            + "\n2020-01-01,delisting,C,,C,,https://example/a,n"
             + "\n2020-01-01,delisting,C,,C,,https://example/b,n\n",
-            "non-decreasing",
+            "duplicate index-constitution event",
         ),
         (
             EVENT_HEADER + "\n2020-01-01,ticker_change,A,,A,B,https://example/a,n\n",

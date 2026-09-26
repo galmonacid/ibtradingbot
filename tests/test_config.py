@@ -125,10 +125,14 @@ def test_phase3_validation_settings_are_typed_and_safe(tmp_path: Path) -> None:
         load_config(path)
 
 
-def test_public_reconstructed_source_is_allowed_but_dynamic_source_is_not(tmp_path: Path) -> None:
+def test_non_live_historical_universe_sources_are_allowed(tmp_path: Path) -> None:
     source = (ROOT / "config.example.yaml").read_text(encoding="utf-8")
     path = tmp_path / "public-reconstructed.yaml"
     path.write_text(
         source.replace("source: fixed_seed", "source: public_reconstructed"), encoding="utf-8"
     )
     assert load_config(path).values["universe"]["source"] == "public_reconstructed"
+    path.write_text(
+        source.replace("source: fixed_seed", "source: trusted_canonical"), encoding="utf-8"
+    )
+    assert load_config(path).values["universe"]["source"] == "trusted_canonical"

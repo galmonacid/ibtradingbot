@@ -6,7 +6,31 @@ The initial goal is **not** to maximize raw return. The goal is to build a robus
 
 > This repository is a research and engineering project, not a promise of returns or financial advice.
 
-## Core design
+## Current research decision
+
+The certified Phase 3 V1 run failed: 2021-07-01–2026-06-30 OOS CAGR **-0.17%**,
+Sharpe **0.001**, maximum drawdown **15.03%**. Phase 4 remains blocked. The root
+[`research_report.md`](research_report.md) is an older **synthetic fixture**; the real
+native report is local at `data/local/phase3_build_v3/research_report.md`, with its
+verified hashes and findings recorded in [`docs/QUANT_SPEC.md`](docs/QUANT_SPEC.md).
+
+The redesigned specification implements monthly momentum selection, a one-month return
+skip, equal-weight allocation with portfolio volatility scaling, a simpler SPY trend
+regime and explicit £1,000/£3,000 GBP feasibility tests. The separate V2 development
+implementation and `momentum-v2-validation` command are complete. On inspected
+2021-07-01–2026-06-30 history, the £1,000 baseline placed no trades and the £3,000
+baseline lost money, exceeded the 15% drawdown gate, and supplied only 26 FIFO closures
+and 23 completed position episodes. No fixed sensitivity neighbor was viable. The V2
+candidate is therefore rejected for qualification; Phase 4 remains blocked. Use
+`config.phase3-v2.yaml` for reproducible V2 development research.
+The original `config.example.yaml`, `config.phase3.yaml` and V1 commands remain controls.
+See [V2 implementation and command](docs/PHASE3_V2_IMPLEMENTATION.md) and
+[delivery evidence](GOAL-PHASE3-V2.md).
+The V1 specification is preserved in [`docs/QUANT_SPEC_V1.md`](docs/QUANT_SPEC_V1.md).
+The redesign must pass unchanged deployment gates on genuinely untouched evidence;
+retesting inspected history is development research, not fresh OOS proof.
+
+## V1 design and intended operating environment
 
 - **Broker/account:** Interactive Brokers UK Stocks & Shares ISA
 - **Asset class:** Highly liquid US large-cap equities
@@ -64,7 +88,7 @@ The strategy is considered deployable only if it meets all mandatory gates defin
 
 At minimum:
 
-- Positive out-of-sample CAGR
+- Out-of-sample CAGR >= 8%
 - Out-of-sample Sharpe >= 0.8
 - Maximum drawdown <= 15%
 - Net performance remains acceptable after fees/slippage assumptions
@@ -127,12 +151,30 @@ python -m build
 ## Phase 3 trusted historical producer
 
 Phase 3 provides separate acquisition and offline trust boundaries. Acquire immutable Tiingo
-extracts with `momentum-historical-producer`; acquire FMP extracts through the typed
-`src.data.fmp` boundary; then run `momentum-historical-build --help` for the explicit pinned-source
-inputs required to produce canonical Parquet and content-bound producer evidence. The offline
+extracts with `momentum-historical-producer`; then run `momentum-historical-build --help` for the explicit pinned-source
+inputs required to produce canonical Parquet and content-bound dataset evidence. The offline
 build command re-verifies source manifests and raw hashes, derives primary constituent changes,
-performs the independent audit, checks Tiingo/FMP agreement, and runs semantic and execution
-audits. It never contacts a broker or places an order.
+performs the independent audit and runs dataset semantic checks. Optional FMP inputs add a
+supplemental agreement check but are not part of the user-authorized Phase 3 source minimum. It
+does not accept execution assertions, contact a broker, or place an order. Execution certification
+belongs to the subsequent native backtest/validation run and remains fail-closed until its complete
+decision/order/fill population is content-bound to this dataset.
+
+Create each approved Git-source manifest from its real checkout rather than typing provenance:
+
+```bash
+momentum-git-source-snapshot \
+  --checkout data/local/phase3_sources/historical_sp500_constituents \
+  --output data/local/phase3_manifests/membership.json \
+  --source-name historical_sp500_constituents \
+  --licence MIT \
+  --file LICENSE \
+  --file sp_500_historical_components.csv
+```
+
+The command verifies the approved origin, current 40-character HEAD, tracked status, clean selected
+files, and their SHA-256 hashes. Local provider/source extracts remain ignored and must not be
+committed.
 
 The build output is not itself a performance claim. Phase 3 remains incomplete until the exact
 licensed source snapshots are approved, the resulting real dataset is run through the native
@@ -217,13 +259,13 @@ from those observations rather than accepted as caller-supplied summaries. Missi
 inconsistent evidence fails closed. See
 `docs/PHASE3_HISTORICAL_VALIDATION.md` for conventions.
 
-The repository does not yet contain its planned 1996-present point-in-time dataset. The checked-in
-engineering fixture cannot make deployment gates pass, and Phase 4 must not begin from synthetic or
-fixed-universe results. Phase 3's intended data producer uses
+The checked-in engineering fixture cannot make deployment gates pass, and Phase 4 must not begin
+from synthetic or fixed-universe results. The local certified real-data build uses
 [`chinobing/historical_sp500_constituents`](https://github.com/chinobing/historical_sp500_constituents)
 as primary membership, [`unliftedq/index-constitution`](https://github.com/unliftedq/index-constitution)
 for ticker changes and delistings, and [`riazarbi/sp500-scraper`](https://github.com/riazarbi/sp500-scraper)
-plus historical SPY holdings for QA. Tiingo raw/adjusted OHLCV, dividends, and splits then build
+with its Wikipedia and historical iShares IVV streams for QA. Tiingo raw/adjusted OHLCV,
+dividends, and splits then build
 canonical Parquet data. Available FMP Basic price, dividend, delisting, and security-metadata
 endpoints are retained as independent validation evidence only; they never backfill canonical data
 or alter membership/identity history. The producer must pin source commits, retain source manifests,
@@ -241,17 +283,22 @@ python -m pip install '.[historical-data]'
 momentum-historical-producer --help
 ```
 
-The command consumes a JSON request plan containing only `security_id`, `provider_symbol`,
+The acquisition command consumes a JSON request plan containing only `security_id`, `provider_symbol`,
 `start`, and `end`; it reads the token from `TIINGO_API_TOKEN` (or a named environment variable),
-never from the plan or output manifest. All outputs remain deployment-inadmissible until the
-offline semantic build, independent 50–100-event audit, historical backtest, and execution/cost
-audit have all passed in-process. The repository intentionally does not contain credentials or
-licensed/provider extracts.
+never from the plan or output manifest. The real-data producer derives an admissible start only
+after a 400-member price-eligible floor is sustained; unavailable provider histories and dated
+quality quarantines remain explicit evidence rather than being filled. Run the content-bound
+native validation with `momentum-native-validation` and the canonical manifest, dataset evidence,
+universe policy, `config.phase3.yaml`, and this Phase 3 specification. The repository intentionally
+does not contain credentials or provider extracts.
 
-Source identity is currently unresolved: the documented
-`chinobing/historical_sp500_constituents` repository could not be verified, while the described
-1996-present file appears under `fja05680/sp500`. Do not substitute one silently; pin the approved
-primary repository, commit, licence, and file before treating a real run as evidence. See
+The approved `chinobing/historical_sp500_constituents` repository is available and must be pinned
+to an exact origin, commit, licence, and tracked-file hashes with
+`momentum-git-source-snapshot`. Its advertised 1996-present file has materially fewer than 500
+symbols through much of its early history, so availability alone does not establish complete
+coverage. `riazarbi/sp500-scraper` contains historical iShares IVV rather than SPY holdings and
+has no detected repository licence file; record and resolve those limitations before treating a
+real run as admissible. See
 `docs/PHASE3_HISTORICAL_VALIDATION.md` and `docs/DATA_AND_FEATURES.md` for the full contract.
 
 ### Retired public reconstructed research mode

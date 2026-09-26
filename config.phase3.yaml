@@ -1,0 +1,139 @@
+project:
+  name: momentum-ml-bot
+  timezone: Europe/London
+  base_currency: GBP
+
+calendar:
+  exchange: XNYS
+  version: tiingo-spy-sessions-v1
+
+corporate_actions:
+  version: tiingo-unliftedq-v1
+
+universe:
+  source: trusted_canonical
+  version: chinobing-tiingo-phase3-v1
+  benchmark: SPY
+  max_symbols: 50
+  min_price_usd: 10
+  min_median_dollar_volume_20d: 500000000
+  min_history_sessions: 252
+  require_primary_listing_us: true
+
+data_quality:
+  suspicious_adjusted_move: 0.50
+  stale_adjusted_price_sessions: 5
+  likely_split_min_ratio: 1.80
+  likely_split_adjusted_tolerance: 0.10
+
+strategy:
+  rebalance_frequency: weekly
+  rebalance_day: Friday
+  target_positions: 4
+  min_positions: 0
+  max_positions: 5
+  rank_hysteresis_multiplier: 2
+
+  momentum:
+    lookback_63d_weight: 0.35
+    lookback_126d_weight: 0.35
+    lookback_252d_weight: 0.30
+    skip_recent_days: 5
+
+  trend:
+    sma_fast: 50
+    sma_medium: 100
+    sma_slow: 200
+    require_price_above_sma200: true
+
+  ranking:
+    momentum_weight: 0.65
+    trend_weight: 0.30
+
+  penalties:
+    volatility_weight: 0.20
+    drawdown_weight: 0.15
+
+regime:
+  benchmark: SPY
+  sma_slow: 200
+  breadth_lookback: 200
+  risk_on_breadth_threshold: 0.60
+  neutral_breadth_threshold: 0.45
+  volatility_lookback: 20
+  high_vol_percentile: 0.80
+
+portfolio:
+  target_annual_volatility: 0.12
+  max_position_weight: 0.30
+  min_position_weight: 0.10
+  max_gross_exposure_risk_on: 1.00
+  max_gross_exposure_neutral: 0.50
+  max_gross_exposure_risk_off: 0.00
+  cash_buffer: 0.02
+
+risk:
+  max_portfolio_drawdown_soft: 0.10
+  max_portfolio_drawdown_hard: 0.15
+  hard_drawdown_requires_manual_reenable: true
+  max_single_position_loss_from_entry: 0.12
+  max_gap_loss_assumption: 0.08
+
+execution:
+  broker: IBKR
+  account_type: ISA
+  order_type: marketable_limit
+  max_limit_offset_bps: 20
+  max_spread_bps: 15
+  min_order_value_gbp: 150
+  allow_fractional_shares: true
+  allow_short: false
+  allow_margin: false
+
+costs:
+  commission_per_order_usd: 0.35
+  slippage_bps_each_side: 5
+  fx_buffer_bps: 5
+
+stress_costs:
+  commission_multiplier: 2.0
+  slippage_bps_each_side: 10
+  fx_buffer_bps: 5
+
+ml:
+  enabled: false
+  model: lightgbm
+  target_horizon_days: 20
+  classification_threshold: 0.55
+  min_training_rows: 5000
+  retrain_frequency: monthly
+  probability_calibration: isotonic
+
+validation:
+  initial_train_years: 8
+  validation_years: 2
+  test_years: 1
+  walk_forward_step_months: 6
+  embargo_days: 20
+  bootstrap_iterations: 2000
+  bootstrap_block_length: 20
+  bootstrap_seed: 20260909
+  plateau_relative_tolerance: 0.20
+  minimum_economic_validation_score: 0.60
+  # At least 95% of daily- and regime-block bootstrap paths must remain profitable,
+  # have non-negative Sharpe, and avoid drawdowns above 25%.
+  minimum_bootstrap_cagr_q05: 0.00
+  minimum_bootstrap_sharpe_q05: 0.00
+  maximum_bootstrap_drawdown_q95: 0.25
+  sensitivity_grid:
+    target_positions: [3, 4, 5]
+    skip_recent_days: [0, 5, 10]
+    target_annual_volatility: [0.10, 0.12, 0.15]
+    risk_on_breadth_threshold: [0.55, 0.60, 0.65]
+    rebalance_frequency: [weekly, biweekly]
+    rebalance_day: [Thursday, Friday]
+    trend_window_scale: [0.80, 1.00, 1.20]
+    momentum_63d_weight: [0.30, 0.35, 0.40]
+    execution_delay_sessions: [1, 2]
+    commission_multiplier: [1.0, 2.0]
+    slippage_bps_each_side: [5.0, 10.0]

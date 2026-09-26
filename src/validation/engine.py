@@ -10,6 +10,7 @@ from datetime import date
 from src.validation.sensitivity import (
     ParameterSet,
     PlateauSelection,
+    SensitivityError,
     SensitivityScore,
     select_stable_plateau,
 )
@@ -62,6 +63,7 @@ def run_walk_forward_selection(
     *,
     relative_tolerance: float = 0.20,
     minimum_viable_neighbours: int = 1,
+    allow_unsupported_fallback: bool = False,
 ) -> WalkForwardEvaluation:
     """Choose on validation only, then evaluate the fixed choice once on each test fold."""
     if not windows or not candidates:
@@ -77,12 +79,33 @@ def run_walk_forward_selection(
                 raise ValueError("validation evaluation must not expose observations")
             scores_list.append(SensitivityScore(candidate, validation.score))
         scores = tuple(scores_list)
-        selection = select_stable_plateau(
-            scores,
-            grid_axes=grid_axes,
-            relative_tolerance=relative_tolerance,
-            minimum_viable_neighbours=minimum_viable_neighbours,
-        )
+        try:
+            selection = select_stable_plateau(
+                scores,
+                grid_axes=grid_axes,
+                relative_tolerance=relative_tolerance,
+                minimum_viable_neighbours=minimum_viable_neighbours,
+            )
+        except SensitivityError as error:
+            if (
+                not allow_unsupported_fallback
+                or str(error) != "validation optimum is an unsupported isolated peak"
+            ):
+                raise
+            selected = min(
+                scores,
+                key=lambda item: (-item.validation_score, item.parameters),
+            )
+            best = selected.validation_score
+            floor = best - max(abs(best), 1e-12) * relative_tolerance
+            viable = tuple(item for item in scores if item.validation_score >= floor)
+            selection = PlateauSelection(
+                selected,
+                viable,
+                0,
+                (),
+                relative_tolerance,
+            )
         test_context = EvaluationContext(
             window.index,
             window.train + window.validation,

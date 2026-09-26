@@ -79,6 +79,30 @@ def test_missing_or_conflicting_evidence_fails_closed_and_quarantines() -> None:
     assert unresolved["event-010"].quarantine_to == events[10].effective_date + timedelta(days=2)
 
 
+def test_partial_source_coverage_can_meet_explicit_corroboration_floor() -> None:
+    events = _events(75)
+    evidence = tuple(
+        row
+        for row in _evidence(events)
+        if not (row.source == "holdings" and int(row.symbol[1:]) >= 50)
+        and not (row.source == "scraper" and int(row.symbol[1:]) >= 60)
+    )
+    report = audit_constituent_changes(
+        events,
+        evidence,
+        sample_size=75,
+        seed=7,
+        require_every_source=False,
+        minimum_corroborated_events=50,
+    )
+    assert report.passed
+    assert report.corroborated_events == 60
+    assert {row.source for event in report.audited_events for row in event.evidence} == {
+        "holdings",
+        "scraper",
+    }
+
+
 @pytest.mark.parametrize("sample_size", [49, 101])
 def test_sample_size_contract_is_enforced(sample_size: int) -> None:
     events = _events(120)
@@ -134,3 +158,22 @@ def test_change_population_is_derived_from_consecutive_snapshots() -> None:
         identities,
     )
     assert {(row.security_id, row.action) for row in changes} == {("A", "remove"), ("B", "add")}
+
+
+def test_removal_uses_snapshot_identity_when_source_observation_lags_delisting() -> None:
+    identities = DatedSecurityIdentity(
+        (
+            SecurityIdentityInterval("A", "AAA", date(2019, 1, 1), date(2020, 1, 2)),
+            SecurityIdentityInterval("B", "BBB", date(2019, 1, 1), None),
+        )
+    )
+    changes = derive_constituent_changes(
+        (
+            MembershipSnapshot(date(2020, 1, 3), ("AAA",)),
+            MembershipSnapshot(date(2020, 1, 6), ("BBB",)),
+        ),
+        identities,
+    )
+    removal = next(row for row in changes if row.action == "remove")
+    assert removal.security_id == "A"
+    assert removal.effective_date == date(2020, 1, 6)

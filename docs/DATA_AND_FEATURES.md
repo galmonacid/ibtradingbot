@@ -1,5 +1,15 @@
 # Data and Feature Specification
 
+## Version scope
+
+The features and normalization below describe V1. The proposed [V2 specification](QUANT_SPEC.md)
+replaces the ranking blend with `P[t-21] / P[t-252] - 1`, requires 253 contiguous session
+closes, and uses both 20- and 63-session covariance for portfolio risk. V2 does not use
+z-scores or breadth to select trades. Existing features remain available for diagnostics.
+V2 also requires separately sourced, timestamped GBP/USD inputs and account cash/fee
+modeling before small-account qualification. These additions are unimplemented; source
+provenance, PIT membership, no-backfill and missing-data rules below remain mandatory.
+
 ## 1. Data requirements
 
 Minimum daily OHLCV data:
@@ -30,11 +40,17 @@ The research pipeline should use adjusted historical prices where appropriate, w
 
 Phase 3 uses `chinobing/historical_sp500_constituents` as the primary dated S&P 500 membership
 source from 1996, `unliftedq/index-constitution` for ticker-change and delisting events, and
-Tiingo for raw and adjusted daily OHLCV, dividends, and splits. `riazarbi/sp500-scraper` and
-historical SPY holdings are independent membership-QA sources. This is the initial point-in-time
+Tiingo for raw and adjusted daily OHLCV, dividends, and splits. The available
+`riazarbi/sp500-scraper` Wikipedia and iShares IVV histories are membership-QA streams; IVV must
+not be represented as SPY, and their incomplete horizon/licence status must remain explicit. They
+are local-research QA only and do not define the universe. This is the initial point-in-time
 route; CRSP/WRDS is not required for initial research validation. It must nevertheless meet the
 point-in-time, identity, coverage, reconciliation, and audit requirements in
 `PHASE3_HISTORICAL_VALIDATION.md` before it is used as deployment evidence.
+
+The two riazarb streams are retained because the real common-window audit independently
+corroborates more than 50 of the deterministic 75-event sample. Their missing observations remain
+reported coverage gaps; neither source is misrepresented as full-horizon or as SPY holdings.
 
 The primary membership snapshots establish membership intervals. The index-constitution event
 history establishes dated security identity, ticker successor, and delisting treatment. Tiingo
@@ -42,6 +58,13 @@ establishes prices and corporate-action inputs. Store immutable, commit-pinned s
 separately from canonical Parquet output, including repository URL, commit SHA, retrieval timestamp,
 file hashes, transformation version, source licences, request parameters, and all failed requests.
 Do not replace old snapshots or extracts in place.
+
+The canonical investable universe is not assumed to contain exactly 500 names. It is each dated
+primary membership intersected with verified Tiingo availability for that membership/request
+window. Failed later aliases do not erase valid earlier history. The producer records every
+unavailable request, daily missing-bar exclusion, snapshot count, and session count in a
+hash-bound universe policy and requires at least 400 price-eligible members on every validation
+session.
 
 FMP Basic is a supplemental validation source: use `historical-price-eod/full` for independent
 raw-OHLCV/last-bar checks, `dividends` for action checks, and `delisted-companies` for delisting

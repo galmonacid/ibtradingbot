@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, Protocol
+from urllib.error import HTTPError
 
 
 class TiingoAcquisitionError(RuntimeError):
@@ -90,6 +91,23 @@ def _request_id(request: TiingoRequest) -> str:
     return hashlib.sha256(_canonical_json(content)).hexdigest()[:20]
 
 
+def tiingo_request_plan_sha256(requests: tuple[TiingoRequest, ...]) -> str:
+    """Return the order-independent identity of a complete acquisition request set."""
+    rows = [
+        {
+            "security_id": row.security_id,
+            "provider_symbol": row.provider_symbol,
+            "start": row.start.isoformat(),
+            "end": row.end.isoformat(),
+        }
+        for row in sorted(
+            requests,
+            key=lambda item: (item.security_id, item.start, item.end, item.provider_symbol),
+        )
+    ]
+    return hashlib.sha256(_canonical_json(rows)).hexdigest()
+
+
 def _safe_symbol(value: str, field: str) -> str:
     allowed = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-"
     if not value or any(character not in allowed for character in value):
@@ -150,6 +168,7 @@ def acquire_tiingo_extracts(
         raise TiingoAcquisitionError("retry and throttle settings are invalid")
     if not requests:
         raise TiingoAcquisitionError("at least one Tiingo request is required")
+    request_plan_sha256 = tiingo_request_plan_sha256(requests)
     when = retrieved_at or datetime.now(UTC)
     if when.tzinfo is None or when.utcoffset() is None:
         raise TiingoAcquisitionError("retrieved_at must be timezone-aware")
@@ -157,7 +176,7 @@ def acquire_tiingo_extracts(
     raw_directory = output_directory / "raw"
     raw_directory.mkdir(parents=True, exist_ok=True)
     manifest_path = output_directory / "tiingo_manifest.json"
-    prior_successes: dict[str, dict[str, Any]] = {}
+    prior_records: dict[str, dict[str, Any]] = {}
     if manifest_path.exists():
         try:
             prior: object = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -172,13 +191,14 @@ def acquire_tiingo_extracts(
                 "plan",
                 "api_version",
                 "licence",
+                "request_plan_sha256",
                 "retrieved_at",
                 "requests",
                 "complete",
                 "deployment_admissible",
                 "paper_execution_permitted",
             }
-            or prior.get("schema_version") != "tiingo-extract-manifest-v1"
+            or prior.get("schema_version") != "tiingo-extract-manifest-v2"
         ):
             raise TiingoAcquisitionError("existing Tiingo manifest schema is invalid")
         if (
@@ -186,6 +206,7 @@ def acquire_tiingo_extracts(
             or prior.get("plan") != plan
             or prior.get("api_version") != api_version
             or prior.get("licence") != licence
+            or prior.get("request_plan_sha256") != request_plan_sha256
         ):
             raise TiingoAcquisitionError(
                 "existing Tiingo manifest is incompatible with requested plan"
@@ -204,22 +225,23 @@ def acquire_tiingo_extracts(
         prior_rows = prior.get("requests")
         if not isinstance(prior_rows, list):
             raise TiingoAcquisitionError("existing Tiingo manifest requests are invalid")
-        prior_successes = {
+        prior_records = {
             str(row.get("request_id")): row
             for row in prior_rows
-            if isinstance(row, dict) and row.get("status") == "success"
+            if isinstance(row, dict)
         }
-    records: list[dict[str, Any]] = []
+    records: list[dict[str, Any]] = list(prior_records.values())
     successful = failed = resumed = 0
     seen: set[str] = set()
 
     def checkpoint() -> None:
         manifest = {
-            "schema_version": "tiingo-extract-manifest-v1",
+            "schema_version": "tiingo-extract-manifest-v2",
             "provider": "Tiingo",
             "plan": plan,
             "api_version": api_version,
             "licence": licence,
+            "request_plan_sha256": request_plan_sha256,
             "retrieved_at": when.astimezone(UTC).isoformat(),
             "requests": records,
             "complete": len(records) == len(requests)
@@ -241,6 +263,7 @@ def acquire_tiingo_extracts(
             raise TiingoAcquisitionError("duplicate Tiingo request")
         seen.add(identifier)
         raw_path = raw_directory / f"{identifier}.json"
+        pending_path = raw_directory / f".{identifier}.json.pending"
         parameters = {
             "startDate": request.start.isoformat(),
             "endDate": request.end.isoformat(),
@@ -253,11 +276,18 @@ def acquire_tiingo_extracts(
             "endpoint": f"tiingo/daily/{request.provider_symbol}/prices",
             "parameters": parameters,
         }
+        prior_record = prior_records.get(identifier)
+        if not raw_path.exists() and pending_path.exists() and prior_record is not None:
+            pending_bytes = pending_path.read_bytes()
+            if prior_record.get("raw_sha256") != hashlib.sha256(pending_bytes).hexdigest():
+                raise TiingoAcquisitionError(
+                    f"pending extract {pending_path.name} is not bound to its prior manifest"
+                )
+            pending_path.replace(raw_path)
         if raw_path.exists():
             payload_bytes = raw_path.read_bytes()
-            prior_record = prior_successes.get(identifier)
             digest = hashlib.sha256(payload_bytes).hexdigest()
-            if prior_record is None:
+            if prior_record is None or prior_record.get("status") != "success":
                 raise TiingoAcquisitionError(
                     f"existing extract {raw_path.name} is not bound to a prior manifest"
                 )
@@ -269,6 +299,7 @@ def acquire_tiingo_extracts(
                 raise TiingoAcquisitionError(
                     f"existing immutable extract {raw_path.name} is invalid"
                 ) from error
+            records[:] = [row for row in records if row.get("request_id") != identifier]
             records.append(
                 {
                     **common,
@@ -286,34 +317,58 @@ def acquire_tiingo_extracts(
 
         error_message = ""
         payload_rows: list[dict[str, Any]] | None = None
+        attempts_used = 0
         for attempt in range(1, maximum_attempts + 1):
+            attempts_used = attempt
             try:
                 payload_rows = _validate_payload(
                     transport.get_json(common["endpoint"], parameters, token)
                 )
                 break
-            except (OSError, TimeoutError, ValueError, TiingoAcquisitionError) as error:
+            except HTTPError as error:
+                error_message = _safe_error(error, token)
+                if error.code in {400, 401, 403, 404}:
+                    break
+                if attempt < maximum_attempts:
+                    retry_after = error.headers.get("Retry-After")
+                    try:
+                        delay = float(retry_after) if retry_after else 2.0**attempt
+                    except ValueError:
+                        delay = 2.0**attempt
+                    sleeper(max(minimum_interval_seconds, delay))
+                elif error.code == 429:
+                    checkpoint()
+                    raise TiingoAcquisitionError(
+                        "Tiingo rate limit remained active; acquisition checkpoint is resumable"
+                    ) from error
+            except TiingoAcquisitionError as error:
+                error_message = _safe_error(error, token)
+                break
+            except (OSError, TimeoutError, ValueError) as error:
                 error_message = _safe_error(error, token)
                 if attempt < maximum_attempts:
-                    sleeper(minimum_interval_seconds)
+                    sleeper(max(minimum_interval_seconds, 2.0**attempt))
         if payload_rows is None:
+            records[:] = [row for row in records if row.get("request_id") != identifier]
             records.append(
-                {**common, "status": "failed", "attempts": maximum_attempts, "error": error_message}
+                {**common, "status": "failed", "attempts": attempts_used, "error": error_message}
             )
             failed += 1
         else:
             payload_bytes = _canonical_json(payload_rows)
-            _atomic_write(raw_path, payload_bytes)
-            records.append(
-                {
-                    **common,
-                    "status": "success",
-                    "resumed": False,
-                    "raw_path": str(raw_path.relative_to(output_directory)),
-                    "raw_sha256": hashlib.sha256(payload_bytes).hexdigest(),
-                    "rows": len(payload_rows),
-                }
-            )
+            _atomic_write(pending_path, payload_bytes)
+            record = {
+                **common,
+                "status": "success",
+                "resumed": False,
+                "raw_path": str(raw_path.relative_to(output_directory)),
+                "raw_sha256": hashlib.sha256(payload_bytes).hexdigest(),
+                "rows": len(payload_rows),
+            }
+            records[:] = [row for row in records if row.get("request_id") != identifier]
+            records.append(record)
+            checkpoint()
+            pending_path.replace(raw_path)
             successful += 1
         checkpoint()
         sleeper(minimum_interval_seconds)

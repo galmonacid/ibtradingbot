@@ -1,5 +1,15 @@
 # Phase 3 Historical Validation
 
+## Recorded outcome and redesign
+
+The real native V1 report under `data/local/phase3_build_v3/` is admissible but fails
+the strategy-performance gates; Phase 4 remains blocked. The root `research_report.md`
+is a synthetic fixture, not this real result. [QUANT_SPEC.md](QUANT_SPEC.md) records the
+verified report hashes, findings and proposed V2 redesign. The conventions below remain
+the implemented V1 validation contract; V2's proposed fixed-candidate sensitivity and
+untouched-test protocol require separate implementation and must not reinterpret V1
+results as a pass. Keep generated evidence and its original input specifications immutable.
+
 Phase 3 adds reusable validation primitives; it does not make the checked-in synthetic
 fixture admissible evidence and does not authorize broker connectivity or order placement.
 
@@ -39,20 +49,20 @@ fixture admissible evidence and does not authorize broker connectivity or order 
 
 ## Required sensitivity scenarios
 
-An admissible run must evaluate configured grids covering target positions, rebalance
-frequency/day, recent-return skip, volatility target, breadth threshold, trend windows, and
-momentum weights. It must also include one additional execution-day delay, 2x commissions,
-and 10 bps slippage. All scenarios must reuse the same point-in-time dataset and OOS windows.
+An admissible run uses a predeclared one-axis-at-a-time design around the production baseline,
+covering target positions, rebalance frequency/day, recent-return skip, volatility target,
+breadth threshold, trend windows, momentum weights, one additional execution-day delay, 2x
+commissions, and 10 bps slippage. This broad design evaluates every configured axis without
+presenting the results as a full Cartesian interaction search. All scenarios reuse the same
+point-in-time dataset and OOS windows.
 
 ## Current evidence limitation
 
-The repository contains a 380-session synthetic dataset and fixed seed universe. It is useful
-for deterministic engineering regression tests, but it cannot establish historical return,
-trade-count, robustness, bootstrap-horizon, diversification, or deployment-gate evidence.
-Supplying a clean, versioned point-in-time universe and matching 2007-present daily
-bars/corporate actions is an external prerequisite for the roadmap exit condition. It does
-not require CRSP/WRDS: the planned initial producer uses version-pinned open-source membership
-and identity records plus Tiingo, subject to the controls below.
+The certified local build uses the version-pinned open-source membership and identity records
+plus Tiingo Power described below. The validation horizon begins only when at least 400 members
+have usable, causally screened history; unavailable instruments are recorded rather than filled.
+The synthetic dataset remains engineering-test evidence only. The generated native report—not
+the presence of a dataset—determines whether the Phase 3 deployment gates pass.
 
 ## Historical-data approach: open-source membership + Tiingo
 
@@ -60,14 +70,18 @@ Phase 3's initial admissible-data target is a reproducible open-source membershi
 not a licensed academic dataset. `chinobing/historical_sp500_constituents` supplies the primary
 1996-present dated S&P 500 membership snapshots. `unliftedq/index-constitution` supplies the
 ticker-change and delisting event layer used to create the security-master identity history.
-`riazarbi/sp500-scraper` and historical SPY holdings are independent membership-QA sources.
+`riazarbi/sp500-scraper` Wikipedia snapshots and its historical iShares IVV holdings are the
+currently available membership-QA streams. The latter must be labelled IVV, not SPY. Because the
+repository has no detected licence file and the two streams do not cover the full 1996-present
+horizon, they are used only for a seeded audit inside their common coverage window under the
+user-authorized local-research/no-redistribution restriction. They do not define membership.
 Tiingo supplies daily raw and adjusted OHLCV plus dividends and splits. Source snapshots, provider
 responses, and derived canonical files must be kept separately and versioned; no source may be
 refreshed in place.
 
-### Supplemental FMP validation layer
+### Optional supplemental FMP validation layer
 
-The available FMP Basic endpoints strengthen validation but do not replace any primary source or
+When supplied, available FMP endpoints strengthen validation but do not replace any primary source or
 silently fill missing history. Retain their immutable responses and request metadata in the
 manifest, and quarantine—not repair—material disagreements:
 
@@ -97,13 +111,21 @@ in its manifest:
   as a permanent security identifier;
 - Tiingo raw and adjusted daily bars, dividends, and splits, with per-security coverage and
   missing-data/exclusion reasons;
+- an independently derived Tiingo request plan exact-hash matched to the acquired manifest;
+- a versioned universe-policy artifact. The research universe is the primary point-in-time
+  membership intersected with Tiingo availability for the applicable membership/request interval,
+  never a whole-company deletion caused by a later alias failure. At least 400 members must have a
+  usable bar on every validation session; daily exclusions and counts are retained and hash-bound;
 - reconciliation of raw-to-adjusted price behaviour against recorded split/dividend events;
-- a randomly selected, reproducibly seeded audit of 50–100 primary-source constituent changes
-  against `riazarbi/sp500-scraper` and historical SPY holdings, with every discrepancy resolved or
-  the affected interval quarantined;
+- a reproducibly seeded sample of 75 primary-source constituent changes in the riazarb Wikipedia
+  and historical IVV common window. At least 50 must be corroborated by one or both source-native
+  streams, both streams must contribute observations, and ambiguous/conflicting observations fail
+  the audit. Missing observations are reported as QA coverage gaps rather than invented matches;
 - explicit treatment of delistings. Missing delisting date, last tradable bar, or return/cash
   treatment is a data-quality failure—not permission to forward-fill, silently remove, or use
-  a favourable terminal price.
+  a favourable terminal price. Where the pinned identity source proves a terminal delisting but
+  no cash/return evidence exists, the producer applies and records a conservative zero-value
+  disposition at the verified last tradable bar; a sourced caller treatment may override it.
 
 Source licences, upstream update semantics, Tiingo access limits, and terms must be checked at
 acquisition time. The project must pin Git source commits, throttle and resume Tiingo requests
@@ -148,6 +170,13 @@ following pass:
 - the seeded 50–100-event independent membership audit has no unresolved discrepancy; and
 - the next-session execution and stressed-cost audit is complete, and every mandatory Phase 3
   deployment gate is `PASS`.
+
+Dataset certification and validation-run certification are separate trust boundaries. The offline
+historical build issues `TrustedDatasetEvidence` for its canonical manifest, membership audit, and
+semantic report only; it neither accepts nor certifies caller-supplied executions. A later native
+validation producer must bind the complete decision/order/fill population, baseline and stressed
+cost models, strategy version, calendar, and validation-run identity before deployment evidence can
+be admissible. Until that producer exists, the generic validation workflow remains fail-closed.
 
 This eligibility permits entry to Phase 4 paper execution only. It does not permit live orders,
 override Phase 4 reconciliation/idempotency/kill-switch controls, or waive the required paper

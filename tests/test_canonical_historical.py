@@ -11,6 +11,8 @@ from src.data.canonical_historical import (
     CanonicalDailyBar,
     CanonicalHistoricalError,
     CanonicalSourceProvenance,
+    VerifiedCanonicalInputs,
+    load_verified_canonical_inputs,
     verify_canonical_parquet,
     write_canonical_parquet,
 )
@@ -72,10 +74,20 @@ def test_writes_explicit_canonical_tables_and_manifest(tmp_path: Path) -> None:
     assert payload["transformation_version"] == "test-transform-v1"
     assert payload["source_provenance"][0]["commit_sha"] == "b" * 40
     assert verify_canonical_parquet(result.manifest_path).files == result.files
+    loaded = load_verified_canonical_inputs(result.manifest_path)
+    assert loaded.bars == _inputs()["bars"]
+    assert loaded.manifest_sha256
     assert (
         str(pq.read_schema(result.output_directory / "daily_bars.parquet").field("date").type)
         == "date32[day]"
     )
+
+
+def test_verified_canonical_inputs_cannot_be_caller_constructed() -> None:
+    with pytest.raises(CanonicalHistoricalError, match="canonical loader"):
+        VerifiedCanonicalInputs(  # type: ignore[arg-type]
+            object(), "a" * 64, "v1", (), (), (), (), ()
+        )
 
 
 def test_refuses_overwrite_and_duplicate_or_invalid_bars(tmp_path: Path) -> None:

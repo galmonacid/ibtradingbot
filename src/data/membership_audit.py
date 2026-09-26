@@ -66,6 +66,9 @@ class MembershipAuditReport:
     independent_sources: tuple[str, ...]
     population_size: int
     audited_events: tuple[AuditedEvent, ...]
+    require_every_source: bool
+    minimum_corroborated_events: int
+    corroborated_events: int
     passed: bool
 
     def to_json(self) -> str:
@@ -93,7 +96,7 @@ def derive_constituent_changes(
             ("add", current_symbols - previous_symbols, current.as_of),
         ):
             for symbol in sorted(symbols):
-                security_id = identities.resolve(symbol, identity_day)
+                security_id = identities.resolve_snapshot_symbol(symbol, identity_day)
                 semantic = f"{security_id}|{symbol}|{action}|{current.as_of.isoformat()}"
                 event_id = hashlib.sha256(semantic.encode()).hexdigest()[:24]
                 changes.append(
@@ -117,6 +120,8 @@ def audit_constituent_changes(
     sample_size: int,
     seed: int,
     date_tolerance_days: int = 1,
+    require_every_source: bool = True,
+    minimum_corroborated_events: int | None = None,
 ) -> MembershipAuditReport:
     """Audit a seeded sample against two or more independent evidence sources.
 
@@ -130,6 +135,11 @@ def audit_constituent_changes(
         raise MembershipAuditError("date_tolerance_days must be non-negative")
     if len(primary_events) < sample_size:
         raise MembershipAuditError("primary population is smaller than requested sample")
+    required_corroboration = (
+        sample_size if minimum_corroborated_events is None else minimum_corroborated_events
+    )
+    if not 1 <= required_corroboration <= sample_size:
+        raise MembershipAuditError("minimum corroborated events must be within the sample")
     event_ids = [event.event_id for event in primary_events]
     if len(event_ids) != len(set(event_ids)):
         raise MembershipAuditError("primary event_id values must be unique")
@@ -172,7 +182,10 @@ def audit_constituent_changes(
                 discrepancies.append(f"{source}: missing evidence")
             elif len(rows_by_source[source]) > 1:
                 discrepancies.append(f"{source}: ambiguous evidence")
-        resolved = not discrepancies
+        ambiguous = any("ambiguous evidence" in row for row in discrepancies)
+        resolved = not ambiguous and (
+            not discrepancies if require_every_source else bool(candidates)
+        )
         audited.append(
             AuditedEvent(
                 event=event,
@@ -186,6 +199,7 @@ def audit_constituent_changes(
             )
         )
     result = tuple(audited)
+    corroborated = sum(row.resolved for row in result)
     return MembershipAuditReport(
         seed=seed,
         requested_sample_size=sample_size,
@@ -193,5 +207,13 @@ def audit_constituent_changes(
         independent_sources=sources,
         population_size=len(primary_events),
         audited_events=result,
-        passed=all(row.resolved for row in result),
+        require_every_source=require_every_source,
+        minimum_corroborated_events=required_corroboration,
+        corroborated_events=corroborated,
+        passed=corroborated >= required_corroboration
+        and not any(
+            "ambiguous evidence" in discrepancy
+            for row in result
+            for discrepancy in row.discrepancies
+        ),
     )

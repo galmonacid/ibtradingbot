@@ -1,0 +1,27 @@
+# Fixed Phase 3 research candidate. This is not authorization for broker execution.
+strategy_version: monthly-momentum-v2
+target_positions: 4
+numerator_offset: 21
+stock_sma: 200
+spy_sma: 200
+selection_schedule: monthly
+biweekly_anchor: null
+volatility_ceiling: 0.12
+long_covariance_window: 63
+discretionary_band: 0.03
+cash_buffer: 0.02
+max_position_weight: 0.30
+soft_position_weight: 0.15
+soft_drawdown: 0.10
+hard_drawdown: 0.15
+min_order_value_gbp: 150.0
+minimum_price_usd: 10.0
+minimum_median_dollar_volume_20d: 500000000.0
+commission_per_order_usd: 0.35
+slippage_bps: 5.0
+fx_buffer_bps: 5.0
+execution_delay_sessions: 1
+
+# Development reference-rate proxy: covers TARGET closures plus next-day availability.
+# This is not an executable FX quote or vintage certification.
+max_fx_age_days: 6

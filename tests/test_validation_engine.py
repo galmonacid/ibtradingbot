@@ -73,3 +73,37 @@ def test_validation_evaluator_cannot_return_observations() -> None:
 
     with pytest.raises(ValueError, match="must not expose observations"):
         run_walk_forward_selection([window], [candidate], {"positions": (3,)}, evaluator)
+
+
+def test_native_style_fallback_records_unsupported_peak_without_claiming_robustness() -> None:
+    window = WalkForwardWindow(
+        0,
+        (date(2010, 1, 1),),
+        (date(2011, 1, 1),),
+        (date(2012, 1, 1),),
+    )
+    axes = {"positions": (3, 4, 5)}
+    candidates = parameter_grid(axes)
+
+    def evaluator(
+        context: EvaluationContext, parameters: ParameterSet, segment: str
+    ) -> SegmentEvaluation:
+        positions = int(parameters.as_dict()["positions"])
+        if segment == "validation":
+            return SegmentEvaluation({3: 0.1, 4: 1.0, 5: 0.1}[positions])
+        return SegmentEvaluation(0.0, ((context.evaluation_dates[0], 0.0),))
+
+    with pytest.raises(ValueError, match="unsupported isolated peak"):
+        run_walk_forward_selection([window], candidates, axes, evaluator)
+
+    result = run_walk_forward_selection(
+        [window],
+        candidates,
+        axes,
+        evaluator,
+        allow_unsupported_fallback=True,
+    )
+    selection = result.folds[0].selection
+    assert selection.selected.parameters.as_dict() == {"positions": 4}
+    assert selection.neighbouring_viable == 0
+    assert selection.neighbouring_viable_scores == ()

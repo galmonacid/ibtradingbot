@@ -1,5 +1,15 @@
 # Risk Management and Execution Specification
 
+## V2 research boundary
+
+The proposed [V2 specification](QUANT_SPEC.md) preserves the account risk limits and
+10%/15% drawdown controls below. Its monthly schedule and discretionary order band never
+delay mandatory risk reductions. For V2, the £150 minimum applies to entries and optional
+resizes; required exits/reductions may be smaller. Rounding must not waive the configured
+cash buffer: reduce the purchase or reject the plan. The single-name emergency stop
+remains deferred until its data/action checks are implemented, as recorded in Phase 2.
+These are explicit research requirements, not a claim that V2 or live execution exists.
+
 ## 1. Risk hierarchy
 
 Risk controls are ordered:
@@ -26,7 +36,7 @@ net exposure >= 0%
 short exposure = 0%
 single position <= 30%
 number of positions <= 5
-cash >= 2% unless rounding prevents it
+cash >= configured buffer (default 2%); rounding must not waive it
 ```
 
 ---

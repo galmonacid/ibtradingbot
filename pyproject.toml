@@ -29,6 +29,10 @@ momentum-public-reconstructed = "src.cli.public_reconstructed:main"
 momentum-public-daily-prices = "src.cli.public_prices:main"
 momentum-historical-producer = "src.cli.historical_producer:main"
 momentum-historical-build = "src.cli.historical_build:main"
+momentum-git-source-snapshot = "src.cli.git_source_snapshot:main"
+momentum-tiingo-plan = "src.cli.tiingo_plan:main"
+momentum-native-validation = "src.cli.native_validation:main"
+momentum-v2-validation = "src.cli.v2_validation:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]

@@ -21,7 +21,14 @@ from src.data.trusted_historical import (
 def test_verified_source_snapshot_cannot_be_constructed_without_verification() -> None:
     with pytest.raises(TrustedHistoricalError, match="must be issued"):
         VerifiedSourceSnapshot(
-            "x", "https://example.test", "a" * 40, "MIT", datetime.now(UTC), (), "b" * 64
+            "x",
+            "https://example.test",
+            "a" * 40,
+            "MIT",
+            datetime.now(UTC),
+            (),
+            "b" * 64,
+            False,
         )
 
 

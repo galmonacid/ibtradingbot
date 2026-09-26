@@ -11,7 +11,6 @@ from enum import Enum
 from statistics import fmean, stdev
 from typing import cast
 
-from src.data.execution_audit import ExecutionAuditReport
 from src.data.membership_audit import MembershipAuditReport
 from src.data.semantic_certification import SemanticCertificationReport
 from src.validation.ablation import (
@@ -74,8 +73,8 @@ class RealizedTradeEvidence:
 
 
 @dataclass(frozen=True)
-class TrustedProducerEvidence:
-    """Typed result of the trusted producer's source-level semantic checks."""
+class TrustedDatasetEvidence:
+    """Typed result of the trusted producer's dataset-level semantic checks."""
 
     producer_id: str
     producer_version: str
@@ -83,11 +82,10 @@ class TrustedProducerEvidence:
     membership_identity_validated: bool
     corporate_actions_validated: bool
     independent_membership_audit_validated: bool
-    execution_audit_validated: bool
     dataset_manifest_sha256: str
+    universe_policy_sha256: str
     membership_audit_sha256: str
     semantic_report_sha256: str
-    execution_audit_sha256: str
     _attestation: object = field(repr=False)
 
     def __post_init__(self) -> None:
@@ -98,47 +96,46 @@ class TrustedProducerEvidence:
             self.membership_identity_validated,
             self.corporate_actions_validated,
             self.independent_membership_audit_validated,
-            self.execution_audit_validated,
         )
         if any(not isinstance(check, bool) for check in checks):
-            raise TypeError("trusted producer validation checks must be booleans")
-        if self._attestation is not _PRODUCER_ATTESTATION:
-            raise ValueError("trusted producer evidence must be issued from concrete reports")
+            raise TypeError("trusted dataset validation checks must be booleans")
+        if self._attestation is not _DATASET_ATTESTATION:
+            raise ValueError("trusted dataset evidence must be issued from concrete reports")
         for value in (
             self.dataset_manifest_sha256,
+            self.universe_policy_sha256,
             self.membership_audit_sha256,
             self.semantic_report_sha256,
-            self.execution_audit_sha256,
         ):
             if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
-                raise ValueError("trusted producer evidence hashes must be canonical SHA-256")
+                raise ValueError("trusted dataset evidence hashes must be canonical SHA-256")
 
     @property
-    def semantically_validated(self) -> bool:
+    def certified(self) -> bool:
+        """Return whether every dataset-level certification check passed."""
         return all(
             (
                 self.source_manifest_validated,
                 self.membership_identity_validated,
                 self.corporate_actions_validated,
                 self.independent_membership_audit_validated,
-                self.execution_audit_validated,
             )
         )
 
 
-_PRODUCER_ATTESTATION = object()
+_DATASET_ATTESTATION = object()
 
 
-def issue_trusted_producer_evidence(
+def issue_trusted_dataset_evidence(
     *,
     producer_id: str,
     producer_version: str,
     dataset_manifest_sha256: str,
+    universe_policy_sha256: str,
     membership_audit: MembershipAuditReport,
     semantic_report: SemanticCertificationReport,
-    execution_audit: ExecutionAuditReport,
-) -> TrustedProducerEvidence:
-    """Issue evidence only from concrete, content-bound producer reports."""
+) -> TrustedDatasetEvidence:
+    """Issue dataset evidence only from concrete, content-bound producer reports."""
     import hashlib
 
     if (
@@ -147,27 +144,27 @@ def issue_trusted_producer_evidence(
         or len(membership_audit.audited_events) != membership_audit.requested_sample_size
         or len(membership_audit.independent_sources) < 2
     ):
-        raise ValueError("trusted producer requires a complete passing membership audit")
+        raise ValueError(
+            "trusted dataset certification requires a complete passing membership audit"
+        )
     if not semantic_report.passed or semantic_report.findings:
-        raise ValueError("trusted producer requires a complete passing semantic report")
-    if not execution_audit.passed or execution_audit.findings or execution_audit.record_count <= 0:
-        raise ValueError("trusted producer requires a passing execution audit")
+        raise ValueError(
+            "trusted dataset certification requires a complete passing semantic report"
+        )
     audit_bytes = membership_audit.to_json().encode()
     semantic_bytes = semantic_report.to_json().encode()
-    execution_bytes = execution_audit.to_json().encode()
-    return TrustedProducerEvidence(
+    return TrustedDatasetEvidence(
         producer_id,
         producer_version,
         source_manifest_validated=True,
         membership_identity_validated=semantic_report.passed,
         corporate_actions_validated=semantic_report.passed,
         independent_membership_audit_validated=membership_audit.passed,
-        execution_audit_validated=execution_audit.passed,
         dataset_manifest_sha256=dataset_manifest_sha256,
+        universe_policy_sha256=universe_policy_sha256,
         membership_audit_sha256=hashlib.sha256(audit_bytes).hexdigest(),
         semantic_report_sha256=hashlib.sha256(semantic_bytes).hexdigest(),
-        execution_audit_sha256=hashlib.sha256(execution_bytes).hexdigest(),
-        _attestation=_PRODUCER_ATTESTATION,
+        _attestation=_DATASET_ATTESTATION,
     )
 
 
@@ -319,7 +316,6 @@ def run_validation_workflow(
     bootstrap_block_length: int = 20,
     bootstrap_seed: int = 0,
     minimum_economic_validation_score: float = 0.60,
-    trusted_producer_evidence: TrustedProducerEvidence | None = None,
     minimum_bootstrap_cagr_q05: float = 0.0,
     minimum_bootstrap_sharpe_q05: float = 0.0,
     maximum_bootstrap_drawdown_q95: float = 0.25,
@@ -394,12 +390,9 @@ def run_validation_workflow(
         block_length=bootstrap_block_length,
         seed=bootstrap_seed,
     )
-    admissible = (
-        point_in_time_universe
-        and complete_data_coverage
-        and trusted_producer_evidence is not None
-        and trusted_producer_evidence.semantically_validated
-    )
+    # Dataset certification is necessary but cannot certify a validation run. Until a native
+    # content-bound execution trace exists, this generic workflow remains fail-closed.
+    admissible = False
     gates = assess_deployment_gates(
         _derived_gate_inputs(
             admissible=admissible,

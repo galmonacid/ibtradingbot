@@ -34,6 +34,8 @@ class RankingParameters:
     drawdown_penalty: float = 0.15
     winsor_lower: float = 0.01
     winsor_upper: float = 0.99
+    include_momentum: bool = True
+    include_trend: bool = True
 
     def __post_init__(self) -> None:
         numeric = (
@@ -191,8 +193,8 @@ def rank_features(
             / 3.0
         )
         scores[symbol] = (
-            params.momentum_total_weight * momentum
-            + params.trend_weight * trend
+            (params.momentum_total_weight * momentum if params.include_momentum else 0.0)
+            + (params.trend_weight * trend if params.include_trend else 0.0)
             - params.volatility_penalty * transformed["vol_20d"][symbol]
             - params.drawdown_penalty * transformed["drawdown_63d"][symbol]
         )

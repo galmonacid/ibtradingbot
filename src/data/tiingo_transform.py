@@ -15,7 +15,7 @@ from src.data.canonical_historical import (
     CanonicalDailyBar,
     CanonicalSourceProvenance,
 )
-from src.data.tiingo import TiingoRequest
+from src.data.tiingo import TiingoRequest, tiingo_request_plan_sha256
 
 
 class TiingoTransformError(ValueError):
@@ -29,12 +29,23 @@ _TIINGO_TRANSFORM_ATTESTATION = object()
 class TiingoTransformResult:
     bars: tuple[CanonicalDailyBar, ...]
     actions: tuple[CanonicalCorporateAction, ...]
+    unavailable: tuple[UnavailableTiingoRequest, ...]
     provenance: CanonicalSourceProvenance
+    intended_plan_verified: bool
     _attestation: object = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         if self._attestation is not _TIINGO_TRANSFORM_ATTESTATION:
             raise TiingoTransformError("Tiingo source results must be issued by the transformer")
+
+
+@dataclass(frozen=True, order=True)
+class UnavailableTiingoRequest:
+    security_id: str
+    provider_symbol: str
+    start: date
+    end: date
+    reason: str
 
 
 def _request_id(request: TiingoRequest) -> str:
@@ -67,10 +78,36 @@ def _date(value: object) -> date:
         raise TiingoTransformError("Tiingo date is invalid") from error
 
 
-def transform_tiingo_manifest(
+def _request_identity(request: dict[str, Any]) -> tuple[TiingoRequest, str]:
+    security_id = request.get("security_id")
+    symbol = request.get("provider_symbol")
+    parameters = request.get("parameters")
+    if (
+        not isinstance(security_id, str)
+        or not security_id
+        or not isinstance(symbol, str)
+        or not symbol
+        or not isinstance(parameters, dict)
+        or set(parameters) != {"startDate", "endDate", "resampleFreq"}
+        or parameters.get("resampleFreq") != "daily"
+    ):
+        raise TiingoTransformError("Tiingo request identity or parameters are invalid")
+    try:
+        start = date.fromisoformat(str(parameters["startDate"]))
+        end = date.fromisoformat(str(parameters["endDate"]))
+    except ValueError as error:
+        raise TiingoTransformError("Tiingo request bounds are invalid") from error
+    planned = TiingoRequest(security_id, symbol, start, end)
+    return planned, _request_id(planned)
+
+
+def _transform_tiingo_manifest(
     manifest_path: Path, extract_root: Path
-) -> tuple[tuple[CanonicalDailyBar, ...], tuple[CanonicalCorporateAction, ...]]:
-    """Verify and transform every successful request; any failed request fails closed."""
+) -> tuple[
+    tuple[CanonicalDailyBar, ...],
+    tuple[CanonicalCorporateAction, ...],
+    tuple[UnavailableTiingoRequest, ...],
+]:
     try:
         payload: object = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
@@ -81,6 +118,7 @@ def transform_tiingo_manifest(
         "plan",
         "api_version",
         "licence",
+        "request_plan_sha256",
         "retrieved_at",
         "requests",
         "complete",
@@ -90,7 +128,7 @@ def transform_tiingo_manifest(
     if not isinstance(payload, dict) or set(payload) != top_level:
         raise TiingoTransformError("unsupported Tiingo manifest schema")
     if (
-        payload.get("schema_version") != "tiingo-extract-manifest-v1"
+        payload.get("schema_version") != "tiingo-extract-manifest-v2"
         or payload.get("provider") != "Tiingo"
         or not isinstance(payload.get("plan"), str)
         or not payload.get("plan")
@@ -108,16 +146,48 @@ def transform_tiingo_manifest(
         raise TiingoTransformError("Tiingo retrieval timestamp is invalid") from error
     if retrieved_at.tzinfo is None or retrieved_at.utcoffset() is None:
         raise TiingoTransformError("Tiingo retrieval timestamp must be timezone-aware")
-    if payload.get("complete") is not True:
-        raise TiingoTransformError("Tiingo manifest contains failed or incomplete requests")
+    if not isinstance(payload.get("complete"), bool):
+        raise TiingoTransformError("Tiingo manifest completeness flag is invalid")
     requests = payload.get("requests")
     if not isinstance(requests, list) or not requests:
         raise TiingoTransformError("Tiingo manifest has no requests")
     root = extract_root.resolve()
     bars: list[CanonicalDailyBar] = []
     actions: list[CanonicalCorporateAction] = []
+    unavailable: list[UnavailableTiingoRequest] = []
     seen_requests: set[str] = set()
+    planned_requests: list[TiingoRequest] = []
     for request in requests:
+        if not isinstance(request, dict):
+            raise TiingoTransformError("Tiingo manifest request is malformed")
+        planned_request, expected_request_id = _request_identity(request)
+        planned_requests.append(planned_request)
+        request_id_value = request.get("request_id")
+        if request_id_value in seen_requests:
+            raise TiingoTransformError("duplicate Tiingo request record")
+        if isinstance(request_id_value, str):
+            seen_requests.add(request_id_value)
+        if request.get("status") == "failed":
+            if set(request) != {
+                "request_id", "security_id", "provider_symbol", "endpoint", "parameters",
+                "status", "attempts", "error",
+            }:
+                raise TiingoTransformError("Tiingo failed request has invalid fields")
+            if request.get("request_id") != expected_request_id:
+                raise TiingoTransformError("Tiingo failed request ID does not match its bounds")
+            reason = request.get("error")
+            if not isinstance(reason, str) or not reason:
+                raise TiingoTransformError("Tiingo failed request lacks a reason")
+            unavailable.append(
+                UnavailableTiingoRequest(
+                    planned_request.security_id,
+                    planned_request.provider_symbol,
+                    planned_request.start,
+                    planned_request.end,
+                    reason,
+                )
+            )
+            continue
         success_fields = {
             "request_id",
             "security_id",
@@ -131,8 +201,7 @@ def transform_tiingo_manifest(
             "rows",
         }
         if (
-            not isinstance(request, dict)
-            or set(request) != success_fields
+            set(request) != success_fields
             or request.get("status") != "success"
             or not isinstance(request.get("resumed"), bool)
         ):
@@ -163,21 +232,12 @@ def transform_tiingo_manifest(
             or parameters.get("resampleFreq") != "daily"
         ):
             raise TiingoTransformError("Tiingo request parameters are not canonical daily bounds")
-        try:
-            request_start = date.fromisoformat(str(parameters["startDate"]))
-            request_end = date.fromisoformat(str(parameters["endDate"]))
-        except ValueError as error:
-            raise TiingoTransformError("Tiingo request bounds are invalid") from error
-        expected_request_id = _request_id(
-            TiingoRequest(security_id, symbol, request_start, request_end)
-        )
+        request_start = planned_request.start
+        request_end = planned_request.end
         if request_id != expected_request_id:
             raise TiingoTransformError("Tiingo request ID does not match its identity and bounds")
         if request.get("endpoint") != f"tiingo/daily/{symbol}/prices":
             raise TiingoTransformError("Tiingo endpoint does not match its provider symbol")
-        if request_id in seen_requests:
-            raise TiingoTransformError("duplicate Tiingo request record")
-        seen_requests.add(request_id)
         pure = PurePosixPath(relative)
         if pure.is_absolute() or ".." in pure.parts or str(pure) != relative:
             raise TiingoTransformError("Tiingo raw path is not canonical and confined")
@@ -242,16 +302,61 @@ def transform_tiingo_manifest(
     ordered_bars = tuple(sorted(bars))
     if len({(bar.security_id, bar.date) for bar in ordered_bars}) != len(ordered_bars):
         raise TiingoTransformError("overlapping Tiingo requests produced duplicate bars")
-    return ordered_bars, tuple(sorted(actions))
+    if payload.get("request_plan_sha256") != tiingo_request_plan_sha256(
+        tuple(planned_requests)
+    ):
+        raise TiingoTransformError("Tiingo request plan hash does not match its complete requests")
+    if payload.get("complete") != (not unavailable):
+        raise TiingoTransformError("Tiingo completeness flag contradicts failed requests")
+    return ordered_bars, tuple(sorted(actions)), tuple(sorted(unavailable))
 
 
-def transform_tiingo_source(manifest_path: Path, extract_root: Path) -> TiingoTransformResult:
+def transform_tiingo_manifest(
+    manifest_path: Path, extract_root: Path
+) -> tuple[tuple[CanonicalDailyBar, ...], tuple[CanonicalCorporateAction, ...]]:
+    """Verify a complete manifest for callers that require every requested alias."""
+    bars, actions, unavailable = _transform_tiingo_manifest(manifest_path, extract_root)
+    if unavailable:
+        raise TiingoTransformError("Tiingo manifest contains unavailable requests")
+    return bars, actions
+
+
+def transform_tiingo_source(
+    manifest_path: Path,
+    extract_root: Path,
+    expected_request_plan_path: Path | None = None,
+) -> TiingoTransformResult:
     """Return verified records together with manifest-bound provider provenance."""
-    bars, actions = transform_tiingo_manifest(manifest_path, extract_root)
+    bars, actions, unavailable = _transform_tiingo_manifest(manifest_path, extract_root)
     manifest_bytes = manifest_path.read_bytes()
     payload: object = json.loads(manifest_bytes)
     if not isinstance(payload, dict):  # already checked above; keeps this boundary typed
         raise TiingoTransformError("Tiingo manifest must be a mapping")
+    intended_plan_verified = False
+    if expected_request_plan_path is not None:
+        try:
+            expected_payload: object = json.loads(
+                expected_request_plan_path.read_text(encoding="utf-8")
+            )
+            if not isinstance(expected_payload, list):
+                raise TypeError
+            expected_requests = tuple(
+                TiingoRequest(
+                    str(row["security_id"]),
+                    str(row["provider_symbol"]),
+                    date.fromisoformat(str(row["start"])),
+                    date.fromisoformat(str(row["end"])),
+                )
+                for row in expected_payload
+                if isinstance(row, dict)
+            )
+        except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
+            raise TiingoTransformError("expected Tiingo request plan is invalid") from error
+        if len(expected_requests) != len(expected_payload):
+            raise TiingoTransformError("expected Tiingo request plan is malformed")
+        if tiingo_request_plan_sha256(expected_requests) != payload["request_plan_sha256"]:
+            raise TiingoTransformError("Tiingo manifest does not match the intended request plan")
+        intended_plan_verified = True
     requests = payload["requests"]
     assert isinstance(requests, list)
     parameter_records = [
@@ -276,4 +381,11 @@ def transform_tiingo_source(manifest_path: Path, extract_root: Path) -> TiingoTr
         api_version=str(payload["api_version"]),
         request_parameters_sha256=parameters_sha,
     )
-    return TiingoTransformResult(bars, actions, provenance, _TIINGO_TRANSFORM_ATTESTATION)
+    return TiingoTransformResult(
+        bars,
+        actions,
+        unavailable,
+        provenance,
+        intended_plan_verified,
+        _TIINGO_TRANSFORM_ATTESTATION,
+    )

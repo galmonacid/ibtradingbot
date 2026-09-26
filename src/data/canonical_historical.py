@@ -7,7 +7,7 @@ import json
 import math
 import shutil
 import tempfile
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -65,6 +65,30 @@ class CanonicalDataset:
     output_directory: Path
     files: tuple[CanonicalFile, ...]
     manifest_path: Path
+
+
+_VERIFIED_CANONICAL_INPUTS_ATTESTATION = object()
+
+
+@dataclass(frozen=True)
+class VerifiedCanonicalInputs:
+    """Fully verified canonical rows retained for native analytics consumption."""
+
+    dataset: CanonicalDataset
+    manifest_sha256: str
+    transformation_version: str
+    source_provenance: tuple[CanonicalSourceProvenance, ...]
+    bars: tuple[CanonicalDailyBar, ...]
+    identities: tuple[SecurityIdentityInterval, ...]
+    memberships: tuple[SecurityMembershipInterval, ...]
+    actions: tuple[CanonicalCorporateAction, ...]
+    _attestation: object = field(default=None, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        if self._attestation is not _VERIFIED_CANONICAL_INPUTS_ATTESTATION:
+            raise CanonicalHistoricalError(
+                "verified canonical inputs must be issued by the canonical loader"
+            )
 
 
 @dataclass(frozen=True, order=True)
@@ -415,10 +439,11 @@ def write_canonical_parquet(
     )
 
 
-def verify_canonical_parquet(manifest_path: Path) -> CanonicalDataset:
-    """Re-read and fully verify a canonical dataset before analytics consumption."""
+def load_verified_canonical_inputs(manifest_path: Path) -> VerifiedCanonicalInputs:
+    """Re-read, verify, and retain exact canonical rows for native analytics."""
     try:
-        payload: object = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest_bytes = manifest_path.read_bytes()
+        payload: object = json.loads(manifest_bytes)
     except (OSError, json.JSONDecodeError) as error:
         raise CanonicalHistoricalError("canonical manifest must be readable JSON") from error
     required = {
@@ -520,4 +545,20 @@ def verify_canonical_parquet(manifest_path: Path) -> CanonicalDataset:
     _validate_bars(bars)
     _validate_actions(actions)
     _validate_relationships(bars, identities, memberships, actions)
-    return CanonicalDataset(root, tuple(verified_files), manifest_path)
+    dataset = CanonicalDataset(root, tuple(verified_files), manifest_path)
+    return VerifiedCanonicalInputs(
+        dataset,
+        hashlib.sha256(manifest_bytes).hexdigest(),
+        transformation_version,
+        provenance,
+        bars,
+        identities,
+        memberships,
+        actions,
+        _VERIFIED_CANONICAL_INPUTS_ATTESTATION,
+    )
+
+
+def verify_canonical_parquet(manifest_path: Path) -> CanonicalDataset:
+    """Re-read and fully verify a canonical dataset before non-native consumers use it."""
+    return load_verified_canonical_inputs(manifest_path).dataset

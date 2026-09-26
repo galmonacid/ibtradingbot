@@ -5,7 +5,6 @@ from datetime import date, timedelta
 
 import pytest
 
-from src.data.execution_audit import ExecutionAuditRecord, audit_historical_executions
 from src.data.membership_audit import (
     ConstituentChange,
     IndependentEvidence,
@@ -23,9 +22,9 @@ from src.validation.gates import GateStatus
 from src.validation.sensitivity import ParameterSet, parameter_grid
 from src.validation.workflow import (
     RealizedTradeEvidence,
-    TrustedProducerEvidence,
+    TrustedDatasetEvidence,
     WorkflowEvidence,
-    issue_trusted_producer_evidence,
+    issue_trusted_dataset_evidence,
     run_validation_workflow,
 )
 
@@ -85,32 +84,16 @@ def _membership_audit():
     return audit_constituent_changes(events, evidence, sample_size=50, seed=1)
 
 
-def _trusted_evidence():
+def _dataset_evidence():
     audit = _membership_audit()
     semantics = SemanticCertificationReport(True, 1, 0, 1, 0, ())
-    execution = audit_historical_executions(
-        (date(2020, 1, 2), date(2020, 1, 3)),
-        (
-            ExecutionAuditRecord(
-                date(2020, 1, 2),
-                date(2020, 1, 3),
-                "SEC",
-                1_000.0,
-                10.0,
-                0.35,
-                0.70,
-                5.0,
-                10.0,
-            ),
-        ),
-    )
-    return issue_trusted_producer_evidence(
+    return issue_trusted_dataset_evidence(
         producer_id="historical-producer",
         producer_version="v1",
         dataset_manifest_sha256="a" * 64,
+        universe_policy_sha256="d" * 64,
         membership_audit=audit,
         semantic_report=semantics,
-        execution_audit=execution,
     )
 
 
@@ -136,12 +119,12 @@ def test_workflow_combines_all_stages_and_is_machine_serializable() -> None:
         ablation_data_id="pit-v1",
         ablation_cost_id="stress-v1",
         bootstrap_seed=9,
-        trusted_producer_evidence=_trusted_evidence(),
     )
     assert result.windows
     assert result.walk_forward.stitched_test_observations
     assert len(result.bootstrap.daily.cagr.samples) == 2_000
-    assert result.gates.ready_for_paper_trading
+    assert not result.admissible_evidence
+    assert not result.gates.ready_for_paper_trading
     assert result.ablations is not None
     assert tuple(item.scenario.name for item in result.ablations.results) == tuple(ablation_calls)
     json.dumps(result.as_dict(), sort_keys=True, allow_nan=False)
@@ -185,12 +168,11 @@ def test_trade_bootstrap_is_invariant_to_caller_order() -> None:
     assert chronological.bootstrap.mean_trade_return == reversed_result.bootstrap.mean_trade_return
 
 
-def test_trusted_evidence_cannot_be_constructed_directly() -> None:
+def test_dataset_evidence_cannot_be_constructed_directly() -> None:
     with pytest.raises(ValueError, match="issued from concrete reports"):
-        TrustedProducerEvidence(
+        TrustedDatasetEvidence(
             "producer",
             "v1",
-            True,
             True,
             True,
             True,
@@ -203,45 +185,30 @@ def test_trusted_evidence_cannot_be_constructed_directly() -> None:
         )
 
 
-def test_trusted_evidence_factory_binds_passing_reports_and_hashes() -> None:
-    evidence = _trusted_evidence()
-    assert evidence.semantically_validated
+def test_dataset_evidence_factory_binds_passing_reports_and_hashes() -> None:
+    evidence = _dataset_evidence()
+    assert evidence.certified
     assert evidence.dataset_manifest_sha256 == "a" * 64
     assert len(evidence.membership_audit_sha256) == 64
     assert len(evidence.semantic_report_sha256) == 64
-    assert len(evidence.execution_audit_sha256) == 64
 
     with pytest.raises(ValueError, match="canonical SHA-256"):
-        issue_trusted_producer_evidence(
+        issue_trusted_dataset_evidence(
             producer_id="historical-producer",
             producer_version="v1",
             dataset_manifest_sha256="not-a-hash",
+            universe_policy_sha256="d" * 64,
             membership_audit=_membership_audit(),
             semantic_report=SemanticCertificationReport(True, 1, 0, 1, 0, ()),
-            execution_audit=audit_historical_executions(
-                (date(2020, 1, 2), date(2020, 1, 3)),
-                (
-                    ExecutionAuditRecord(
-                        date(2020, 1, 2), date(2020, 1, 3), "SEC", 1, 1, 0.35, 0.7, 5, 10
-                    ),
-                ),
-            ),
         )
     with pytest.raises(ValueError, match="passing semantic report"):
-        issue_trusted_producer_evidence(
+        issue_trusted_dataset_evidence(
             producer_id="historical-producer",
             producer_version="v1",
             dataset_manifest_sha256="a" * 64,
+            universe_policy_sha256="d" * 64,
             membership_audit=_membership_audit(),
             semantic_report=SemanticCertificationReport(False, 1, 0, 1, 0, ()),
-            execution_audit=audit_historical_executions(
-                (date(2020, 1, 2), date(2020, 1, 3)),
-                (
-                    ExecutionAuditRecord(
-                        date(2020, 1, 2), date(2020, 1, 3), "SEC", 1, 1, 0.35, 0.7, 5, 10
-                    ),
-                ),
-            ),
         )
 
 

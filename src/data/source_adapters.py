@@ -10,6 +10,13 @@ from datetime import date
 from pathlib import Path
 
 from src.data.membership_audit import IndependentEvidence
+from src.data.source_native_qa import (
+    ISHARES_IVV_ROLE,
+    WIKIPEDIA_ROLE,
+    SourceRole,
+    derive_native_change_observations,
+    parse_riazarbi_snapshot_directory,
+)
 from src.data.trusted_historical import (
     MembershipSnapshot,
     SecurityIdentityInterval,
@@ -37,6 +44,8 @@ _EVENT_TYPES = {"ticker_change", "delisting", "name_change"}
 _MEMBERSHIP_ATTESTATION = object()
 _IDENTITY_ATTESTATION = object()
 _AUDIT_EVIDENCE_ATTESTATION = object()
+_NATIVE_AUDIT_EVIDENCE_ATTESTATION = object()
+_DOCUMENTED_PRIMARY_SYMBOL_CORRECTIONS = {"RVTY (Previously PKI)": "RVTY"}
 
 
 def _bound_file(snapshot: VerifiedSourceSnapshot, root: Path, relative_path: str) -> Path:
@@ -79,14 +88,24 @@ class BoundAuditEvidenceSource:
     _attestation: object = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
-        if self._attestation is not _AUDIT_EVIDENCE_ATTESTATION:
+        if self._attestation not in {
+            _AUDIT_EVIDENCE_ATTESTATION,
+            _NATIVE_AUDIT_EVIDENCE_ATTESTATION,
+        }:
             raise SourceAdapterError("QA evidence must be issued by the source transformer")
+
+    @property
+    def source_native(self) -> bool:
+        return self._attestation is _NATIVE_AUDIT_EVIDENCE_ATTESTATION
 
 
 def transform_audit_evidence_source(
     snapshot: VerifiedSourceSnapshot, root: Path, relative_path: str
 ) -> BoundAuditEvidenceSource:
-    if snapshot.source_name not in {"riazarbi/sp500-scraper", "historical-spy-holdings"}:
+    if snapshot.source_name not in {
+        "riazarbi/sp500-scraper",
+        "historical-index-etf-holdings",
+    }:
         raise SourceAdapterError("unexpected independent audit source role")
     path = _bound_file(snapshot, root, relative_path)
     try:
@@ -114,6 +133,56 @@ def transform_audit_evidence_source(
     return BoundAuditEvidenceSource(snapshot, tuple(sorted(evidence)), _AUDIT_EVIDENCE_ATTESTATION)
 
 
+def transform_riazarbi_audit_source(
+    snapshot: VerifiedSourceSnapshot,
+    root: Path,
+    relative_directory: str,
+    *,
+    source_role: SourceRole,
+) -> BoundAuditEvidenceSource:
+    """Derive independent changes directly from a complete pinned snapshot directory."""
+    expected_name = {
+        WIKIPEDIA_ROLE: "riazarbi/sp500-scraper",
+        ISHARES_IVV_ROLE: "historical-index-etf-holdings",
+    }[source_role]
+    if snapshot.source_name != expected_name:
+        raise SourceAdapterError("QA source role does not match its verified manifest")
+    directory = (root.resolve() / relative_directory).resolve()
+    if not directory.is_relative_to(root.resolve()) or not directory.is_dir():
+        raise SourceAdapterError("QA snapshot directory is missing or outside its source root")
+    prefix = relative_directory.rstrip("/") + "/"
+    manifested = {
+        row.path
+        for row in snapshot.files
+        if row.path.startswith(prefix) and row.path.endswith(".csv")
+    }
+    actual = {
+        path.relative_to(root.resolve()).as_posix()
+        for path in directory.glob("*.csv")
+        if path.is_file()
+    }
+    if not manifested or manifested != actual:
+        raise SourceAdapterError("QA snapshot directory is not exactly covered by its manifest")
+    try:
+        observations = derive_native_change_observations(
+            parse_riazarbi_snapshot_directory(directory, source_role=source_role)
+        )
+        evidence = tuple(
+            IndependentEvidence(
+                snapshot.source_name,
+                observation.symbol,
+                observation.action,
+                observation.observed_on,
+            )
+            for observation in observations
+        )
+    except ValueError as error:
+        raise SourceAdapterError(str(error)) from error
+    if not evidence:
+        raise SourceAdapterError("independent QA snapshots contain no membership changes")
+    return BoundAuditEvidenceSource(snapshot, evidence, _NATIVE_AUDIT_EVIDENCE_ATTESTATION)
+
+
 def _canonical_date(value: str, field: str, line_number: int) -> date:
     try:
         parsed = date.fromisoformat(value)
@@ -136,7 +205,7 @@ def _symbol(value: str, field: str, line_number: int, *, optional: bool = False)
 
 
 def parse_sp500_membership_snapshots(
-    path: Path, *, minimum_members: int = 450, maximum_members: int = 550
+    path: Path, *, minimum_members: int = 440, maximum_members: int = 550
 ) -> tuple[MembershipSnapshot, ...]:
     """Parse the fja05680/chinobing ``date,tickers`` snapshot format."""
     if minimum_members <= 0 or maximum_members < minimum_members:
@@ -155,10 +224,17 @@ def parse_sp500_membership_snapshots(
             if None in row or any(value is None for value in row.values()):
                 raise SourceAdapterError(f"malformed membership row on line {line_number}")
             as_of = _canonical_date(row["date"], "date", line_number)
-            if previous is not None and as_of <= previous:
-                raise SourceAdapterError("membership snapshot dates must be strictly increasing")
+            if previous is not None and as_of < previous:
+                raise SourceAdapterError("membership snapshot dates must be non-decreasing")
             raw_symbols = row["tickers"].split(",")
-            symbols = tuple(_symbol(value, "ticker", line_number) for value in raw_symbols)
+            symbols = tuple(
+                _symbol(
+                    _DOCUMENTED_PRIMARY_SYMBOL_CORRECTIONS.get(value, value),
+                    "ticker",
+                    line_number,
+                )
+                for value in raw_symbols
+            )
             if len(symbols) != len(set(symbols)):
                 raise SourceAdapterError(f"duplicate ticker in membership row {line_number}")
             if not minimum_members <= len(symbols) <= maximum_members:
@@ -166,7 +242,13 @@ def parse_sp500_membership_snapshots(
                     f"membership count outside [{minimum_members}, {maximum_members}] "
                     f"on line {line_number}"
                 )
-            snapshots.append(MembershipSnapshot(as_of, tuple(sorted(symbols))))
+            snapshot = MembershipSnapshot(as_of, tuple(sorted(symbols)))
+            if previous == as_of:
+                # The upstream change log can contain multiple same-day transitions. Research
+                # signals are formed after close, so the final row is the dated EOD membership.
+                snapshots[-1] = snapshot
+            else:
+                snapshots.append(snapshot)
             previous = as_of
     if not snapshots:
         raise SourceAdapterError("membership snapshot file is empty")
@@ -285,8 +367,62 @@ def _identity_intervals(
     return tuple(sorted(rows, key=lambda row: (row.security_id, row.effective_from)))
 
 
+def _temporal_identity_intervals(
+    events: tuple[ConstitutionEvent, ...],
+    coverage_start: date,
+    known_symbols: tuple[str, ...],
+) -> tuple[SecurityIdentityInterval, ...]:
+    """Build event-time identities without merging a successor's earlier symbol history."""
+    symbols = {
+        symbol
+        for event in events
+        for symbol in (event.old_symbol, event.new_symbol)
+        if symbol is not None
+    } | set(known_symbols)
+    active = {symbol: (_security_id(symbol), coverage_start) for symbol in symbols}
+    rows: list[SecurityIdentityInterval] = []
+    for event in events:
+        if event.event_type == "ticker_change":
+            assert event.new_symbol is not None
+            old = active.pop(event.old_symbol, None)
+            if old is None:
+                old = (_security_id(event.old_symbol), coverage_start)
+            old_security, old_started = old
+            if old_started < event.event_date:
+                rows.append(
+                    SecurityIdentityInterval(
+                        old_security, event.old_symbol, old_started, event.event_date
+                    )
+                )
+            replaced = active.pop(event.new_symbol, None)
+            if replaced is not None and replaced[1] < event.event_date:
+                rows.append(
+                    SecurityIdentityInterval(
+                        replaced[0], event.new_symbol, replaced[1], event.event_date
+                    )
+                )
+            active[event.new_symbol] = (old_security, event.event_date)
+        elif event.event_type == "delisting":
+            ended = active.pop(event.old_symbol, None)
+            if ended is not None and ended[1] < event.event_date:
+                rows.append(
+                    SecurityIdentityInterval(
+                        ended[0], event.old_symbol, ended[1], event.event_date
+                    )
+                )
+    rows.extend(
+        SecurityIdentityInterval(security_id, symbol, started, None)
+        for symbol, (security_id, started) in active.items()
+    )
+    return tuple(sorted(rows, key=lambda row: (row.security_id, row.effective_from, row.symbol)))
+
+
 def parse_index_constitution_events(
-    path: Path, *, coverage_start: date, known_symbols: tuple[str, ...] = ()
+    path: Path,
+    *,
+    coverage_start: date,
+    known_symbols: tuple[str, ...] = (),
+    preserve_symbol_reuse: bool = False,
 ) -> ParsedConstitutionEvents:
     """Parse pinned ``event/us.csv`` and derive conservative identity histories."""
     try:
@@ -302,14 +438,11 @@ def parse_index_constitution_events(
             raise SourceAdapterError(
                 "unsupported index-constitution event schema; expected canonical event/us.csv"
             )
-        previous: date | None = None
         seen: set[tuple[date, str, str]] = set()
         for line_number, row in enumerate(reader, start=2):
             if None in row or any(value is None for value in row.values()):
                 raise SourceAdapterError(f"malformed event row on line {line_number}")
             event_date = _canonical_date(row["event_date"], "event_date", line_number)
-            if previous is not None and event_date < previous:
-                raise SourceAdapterError("event dates must be non-decreasing")
             event_type = row["event_type"].strip()
             if event_type not in _EVENT_TYPES:
                 raise SourceAdapterError(f"unsupported event_type on line {line_number}")
@@ -348,10 +481,9 @@ def parse_index_constitution_events(
                     notes,
                 )
             )
-            previous = event_date
     if not events:
         raise SourceAdapterError("index-constitution event file is empty")
-    normalized = tuple(events)
+    normalized = tuple(sorted(events))
     changes = tuple(
         TickerChange(event.event_date, event.old_symbol, event.new_symbol)
         for event in normalized
@@ -366,7 +498,11 @@ def parse_index_constitution_events(
         normalized,
         changes,
         delistings,
-        _identity_intervals(normalized, coverage_start, known_symbols),
+        (
+            _temporal_identity_intervals(normalized, coverage_start, known_symbols)
+            if preserve_symbol_reuse
+            else _identity_intervals(normalized, coverage_start, known_symbols)
+        ),
     )
 
 
@@ -377,11 +513,15 @@ def transform_identity_source(
     *,
     coverage_start: date,
     known_symbols: tuple[str, ...],
+    preserve_symbol_reuse: bool = False,
 ) -> BoundIdentitySource:
     if snapshot.source_name != "unliftedq/index-constitution":
         raise SourceAdapterError("unexpected identity source role")
     path = _bound_file(snapshot, root, relative_path)
     parsed = parse_index_constitution_events(
-        path, coverage_start=coverage_start, known_symbols=known_symbols
+        path,
+        coverage_start=coverage_start,
+        known_symbols=known_symbols,
+        preserve_symbol_reuse=preserve_symbol_reuse,
     )
     return BoundIdentitySource(snapshot, parsed, _IDENTITY_ATTESTATION)
