@@ -1,324 +1,77 @@
-# Data and Feature Specification
+# Data, features and labels
 
-## Version scope
+Status: existing V1/V2 data tooling plus an implemented R3.2 observation/label/split contract. No qualification-grade R3 dataset has passed it. Certification is a content-bound claim about specified checks, not proof that historical data is bias-free.
 
-The features and normalization below describe V1. The proposed [V2 specification](QUANT_SPEC.md)
-replaces the ranking blend with `P[t-21] / P[t-252] - 1`, requires 253 contiguous session
-closes, and uses both 20- and 63-session covariance for portfolio risk. V2 does not use
-z-scores or breadth to select trades. Existing features remain available for diagnostics.
-V2 also requires separately sourced, timestamped GBP/USD inputs and account cash/fee
-modeling before small-account qualification. These additions are unimplemented; source
-provenance, PIT membership, no-backfill and missing-data rules below remain mandatory.
+## Existing lineage and unresolved gaps
 
-## 1. Data requirements
-
-Minimum daily OHLCV data:
-
-```text
-date
-symbol
-open
-high
-low
-close
-adjusted_close
-volume
-```
-
-Corporate actions:
+Preserve immutable raw sources, canonical data and report manifests separately. The existing route uses pinned `chinobing/historical_sp500_constituents` membership, `unliftedq/index-constitution` identity/delisting records, `riazarbi/sp500-scraper` Wikipedia/iShares IVV QA, and Tiingo OHLCV/actions. FMP remains optional independent QA, never a source for silently backfilling canonical prices or membership.
 
-```text
-splits
-cash dividends
-symbol changes
-delistings
-```
-
-The research pipeline should use adjusted historical prices where appropriate, while the execution engine must use live/raw tradable prices.
-
-### Initial historical-data stack
-
-Phase 3 uses `chinobing/historical_sp500_constituents` as the primary dated S&P 500 membership
-source from 1996, `unliftedq/index-constitution` for ticker-change and delisting events, and
-Tiingo for raw and adjusted daily OHLCV, dividends, and splits. The available
-`riazarbi/sp500-scraper` Wikipedia and iShares IVV histories are membership-QA streams; IVV must
-not be represented as SPY, and their incomplete horizon/licence status must remain explicit. They
-are local-research QA only and do not define the universe. This is the initial point-in-time
-route; CRSP/WRDS is not required for initial research validation. It must nevertheless meet the
-point-in-time, identity, coverage, reconciliation, and audit requirements in
-`PHASE3_HISTORICAL_VALIDATION.md` before it is used as deployment evidence.
-
-The two riazarb streams are retained because the real common-window audit independently
-corroborates more than 50 of the deterministic 75-event sample. Their missing observations remain
-reported coverage gaps; neither source is misrepresented as full-horizon or as SPY holdings.
-
-The primary membership snapshots establish membership intervals. The index-constitution event
-history establishes dated security identity, ticker successor, and delisting treatment. Tiingo
-establishes prices and corporate-action inputs. Store immutable, commit-pinned source snapshots
-separately from canonical Parquet output, including repository URL, commit SHA, retrieval timestamp,
-file hashes, transformation version, source licences, request parameters, and all failed requests.
-Do not replace old snapshots or extracts in place.
+Pin origins, commits, licences or explicit absence of a licence, retrieval timestamps, input hashes and transform versions. The user permits available local data with unclear licensing for development research only; record access terms and do not redistribute it. The 400-member historical coverage floor does not establish complete membership or eliminate provider-availability bias. Audit 50–100 seeded constituent changes independently; report disagreements and unavailable histories. Resolve source-use permissions, including the previously missing scraper licence, before relying on them for qualification or redistribution.
 
-The canonical investable universe is not assumed to contain exactly 500 names. It is each dated
-primary membership intersected with verified Tiingo availability for that membership/request
-window. Failed later aliases do not erase valid earlier history. The producer records every
-unavailable request, daily missing-bar exclusion, snapshot count, and session count in a
-hash-bound universe policy and requires at least 400 price-eligible members on every validation
-session.
+Known gaps from V2: dated primary-listing/common-stock classifications; dividend payment dates and withholding; independent exchange-calendar evidence; historical FX release vintages; exact account tariff, conversions, fractional permissions and instrument eligibility. Closing these gaps is a prerequisite to qualification. Missing dividend payment dates create non-spendable receivables, not immediate purchase cash. Missing delisting recovery cannot be replaced by the last observed price or by dropping the security.
 
-FMP Basic is a supplemental validation source: use `historical-price-eod/full` for independent
-raw-OHLCV/last-bar checks, `dividends` for action checks, and `delisted-companies` for delisting
-checks. `profile`, `search-symbol`, `quote`, and `historical-market-capitalization` may enrich or
-sanity-check the security master. These responses must never backfill Tiingo, override the pinned
-membership/identity sources, or project current metadata into historical eligibility.
-
----
+ECB reference data remains development-only until its vintage/timing limitations are resolved. Cross rate is GBP per EUR divided by USD per EUR. The old next-calendar-day availability assumption and six-day development age allowance are documented assumptions, not executable quotes. Use [ECB publication information](https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html) and source terms when registering a new extract; no download or purchase is performed by this reset.
 
-## 2. Point-in-time requirements
+## R3 observation contract
 
-Backtests must not use future information.
+One row per eligible stable security ID and monthly decision timestamp. Store feature cutoff, source availability timestamps, membership interval, raw/adjusted series identity, exclusion reasons, label start/end, label availability, split/fold ID and transform version. Do not use ticker strings as permanent identities.
 
-Examples of forbidden leakage:
+Required prices are complete on the pinned exchange calendar. Adjusted closes may support total-return signals only with causal corporate-action handling; verify prefix invariance under later actions. Fills use raw prices and actual share/cash adjustments. Never forward-fill returns, manufacture missing sessions, use future constituent lists or screen on eventual survival.
 
-- Current S&P 500 constituents applied unchanged to 2008
-- Final adjusted fundamentals that were not known at the time
-- Revised macroeconomic values
-- Forward-filled delisted stocks as if still tradable
-- Features calculated using future closes
-
-For V0 engineering, a fixed universe is acceptable only for code validation.
-
-For performance claims, a point-in-time universe is mandatory.
-
----
-
-## 3. Required price-derived features
-
-For every stock:
-
-### Returns
-
-```text
-ret_1d
-ret_5d
-ret_21d
-ret_63d
-ret_126d
-ret_252d
-```
-
-Momentum features use a 5-day skip:
-
-```text
-ret_63_skip5
-ret_126_skip5
-ret_252_skip5
-```
-
-### Relative returns
-
-```text
-ret_stock_63 - ret_SPY_63
-ret_stock_126 - ret_SPY_126
-ret_stock_252 - ret_SPY_252
-```
-
-### Trend
-
-```text
-price / SMA20 - 1
-price / SMA50 - 1
-price / SMA100 - 1
-price / SMA200 - 1
-SMA50 / SMA200 - 1
-```
+All candidate models use this initial feature set, with no automated feature search:
 
-### Volatility
+| Feature | Definition using information through decision close t |
+| --- | --- |
+| Recent return | P[t]/P[t-21]-1 |
+| Medium/long momentum | P[t-21]/P[t-63]-1, P[t-21]/P[t-126]-1, P[t-21]/P[t-252]-1 |
+| Volatility | Sample daily-return standard deviation over 20 and 63 sessions, annualized by sqrt(252) |
+| Trend distance | P[t]/SMA200[t]-1 |
+| Drawdown | P[t]/max(P[t-251:t])-1, inclusive of t |
+| Liquidity | Log of positive trailing 20-session median raw close times volume |
+| Market state | SPY 21-session return, SPY 20-session volatility, SPY/SMA200-1 |
 
-```text
-vol_10d
-vol_20d
-vol_63d
-```
+P denotes total-return-consistent adjusted close. Verify exact inclusive endpoints and minimum warm-up in tests. Missing required inputs excludes the row; no outcome-conditioned imputation. Ridge scaling is fitted on training rows only. Tree models receive the same raw features. No fundamental, sector, news, sentiment or revised macroeconomic data enters the first experiment.
 
-Annualized:
+## Label definition and availability
 
-```text
-std(daily_returns, window) * sqrt(252)
-```
+For monthly signal date t, let e be the first exchange-session open after t, and x the first exchange-session open after the next monthly signal date. The label is the stock's corporate-action-consistent total holding return from e to x minus the SPY total holding return over the same interval, both measured in GBP with causal FX conventions. Execution slippage, broker fees and small-account portfolio effects belong in the event simulator, not a single universal per-row cost deduction.
 
-### Drawdown
+A label matures only when x and all required outcome data are available. Never train on the future closing price used by an open-to-open label. Record corporate-action accrual separately from spendable cash. Use explicit terminal recovery for a delisting; if unavailable, the sample is unresolved and the dataset cannot support qualification. Do not silently delete difficult outcomes from training or evaluation.
 
-```text
-drawdown_21d
-drawdown_63d
-drawdown_252d
-```
+Label horizon varies with monthly exchange sessions. Purge by actual [e,x] intervals and availability timestamps, not by a presumed fixed 20-day horizon. Same-date stocks remain in the same split. Equal date weights prevent large cross-sections dominating the loss, and thousands of correlated stock rows never count as thousands of independent years.
 
-### Volume/liquidity
+## Evaluation data boundary
 
-```text
-median_dollar_volume_20d
-volume / median_volume_20d
-turnover_proxy
-```
+Every period examined in V1/V2, including their training and validation histories, is R3 development data. A new model, data vendor or split does not make those dates untouched. Register accessed periods and all experiment outcomes. Historical unseen evaluation requires verifiable non-access; otherwise accumulate forward observations after freeze.
 
-### Gap/range
+Immutable manifests bind raw input hashes, calendar, feature schema, row ordering, labels, preprocessing, model, configuration, costs, source revision/tree, environment and timestamps. Dataset/model artifacts and credentials remain in ignored local paths. CI uses synthetic fixtures only; they cannot train a performance-claiming model or establish objective success.
 
-```text
-overnight_gap
-true_range
-ATR14 / close
-```
+## R3.2 development materialization — 2026-09-27
 
----
+The content-bound local run used the V3 canonical manifest, its four Parquet files, producer evidence, universe policy, the empirical SPY calendar and the retrospective ECB GBP/USD archive. It recorded all ten accessed artifacts and their physical hashes. Source terms include two Git snapshots with no detected licence; these are explicitly local-development/no-redistribution inputs under the user's scope decision.
 
-## 4. Market/regime features
+The run produced 30,627 stock-month feature rows from 2021-06-30 through 2026-09-15: 30,133 usable rows and 494 exclusions. Exclusions comprised 334 incomplete 253-session histories, 107 raw prices below $10 and 82 observations below $20m median dollar volume; a row may carry multiple reasons. Stable security identity and half-open membership intervals were preserved, but all 606 retained membership intervals use an explicitly recorded primary/common-stock and retrospective-availability assumption because the source schema lacks dated classification and publication timestamps.
 
-From SPY:
+Of 30,133 attempted labels, 14,481 matured and 15,652 remained unresolved. The unresolved reasons were 13,744 missing cash-action payment dates, 481 unavailable/stale entry FX observations, 410 unavailable/stale exit FX observations, 966 incomplete final horizons, 49 missing exit or explicit delisting recovery and 2 unavailable entry prices. The canonical action schema has 9,923 retained dividends without payment/withholding fields and 35 retained delistings without payment dates. These rows remain in the label artifact and are not silently assigned to training splits.
 
-```text
-SPY_ret_5d
-SPY_ret_21d
-SPY_ret_63d
-SPY_close / SMA50 - 1
-SPY_close / SMA200 - 1
-SPY_vol20
-SPY_drawdown_63
-SPY_drawdown_252
-```
-
-Breadth:
-
-```text
-pct_universe_above_SMA50
-pct_universe_above_SMA200
-pct_universe_positive_63d
-pct_universe_positive_126d
-```
-
-Cross-sectional dispersion:
+The matured labels span 1,765 days. Five folds contain at least one assignment, but only two contain some train, validation and test rows; neither covers the registered 8-year training, 2-year validation and 1-year test history. Therefore there are zero protocol-ready folds. The dataset is useful for interface and exclusion auditing only. R3.3 development training remains blocked; no result is qualification or fresh evidence.
 
-```text
-std(stock_returns_21d)
-std(stock_returns_63d)
-```
-
----
-
-## 5. Optional V2 features
-
-Only add after baseline stability:
-
-- Sector relative strength
-- Beta to SPY
-- Rolling correlation to SPY
-- Idiosyncratic volatility
-- Earnings-event proximity
-- VIX level and term structure
-- Interest-rate regime
-- Credit-spread proxy
-
-Do not add features simply because they improve one backtest period.
-
----
-
-## 6. Feature normalization
-
-For ranking:
-
-```text
-cross-sectional z-score by rebalance date
-```
-
-Winsorize at:
-
-```text
-1st and 99th percentile
-```
-
-For ML:
-
-- fit scalers on training data only,
-- never fit transformations on the full dataset,
-- tree models may use mostly raw/engineered features.
-
----
-
-## 7. Missing data
-
-Rules:
-
-- Do not forward-fill returns.
-- Do not fabricate unavailable history.
-- Exclude symbol from ranking if a mandatory feature is missing.
-- Record every exclusion and reason.
-
----
-
-## 8. Data storage
-
-Recommended local format:
-
-```text
-data/
-├── raw/
-│   ├── historical_sp500_constituents/
-│   │   └── membership_snapshots/
-│   ├── index_constitution/
-│   │   ├── ticker_changes/
-│   │   └── delistings/
-│   ├── membership_qa/
-│   │   ├── sp500_scraper/
-│   │   └── spy_holdings/
-│   ├── fmp_validation/
-│   │   ├── prices/
-│   │   ├── dividends/
-│   │   ├── delistings/
-│   │   └── security_metadata/
-│   └── tiingo/
-│       ├── prices/
-│       └── corporate_actions/
-├── processed/
-│   ├── daily_bars.parquet
-│   ├── features.parquet
-│   ├── universe.parquet
-│   └── security_master.parquet
-└── metadata/
-    └── manifests/
-```
-
-Preferred analytics store:
-
-```text
-Parquet + DuckDB
-```
-
----
-
-## 9. Data quality checks
-
-Every ingestion run must test:
-
-- duplicate `(date, symbol)` rows
-- non-monotonic dates
-- negative prices
-- zero/negative adjusted prices
-- impossible OHLC relationships
-- suspicious one-day moves
-- missing volume
-- stale prices
-- split-related discontinuities
-- raw-versus-adjusted reconciliation around recorded splits and dividends
-- membership-interval gaps/overlaps and ticker-to-security identity conflicts
-- constituent-change audit discrepancies
-
-Example:
-
-```text
-low <= min(open, close)
-high >= max(open, close)
-high >= low
-```
-
-Failures should quarantine records rather than silently correcting them.
+## R3.2 label-evidence closure rerun — 2026-09-28
+
+The closure rerun reconstructed every usable GBP/USD observation in the existing ECB archive, yielding 7,098 causal observations from 1999-01-04 through 2026-09-22. It preserves the 14:10 Europe/Berlin observation-time assumption and following-calendar-day 00:00 UTC availability assumption. This is a retrospective archive, so FX vintage certification remains false.
+
+Dividend evidence combines immutable Nasdaq response bodies with State Street's SPDR historical-distribution workbook for SPY. Matching requires the canonical ex-date and amount, but the label uses the provider's actual payment/payable date; an ex-date is never substituted for payment. The 15% US-UK portfolio-dividend rate is a development assumption sourced to the treaty and conditional on a valid W-8BEN and US-source classification. It is not account-specific withholding evidence. Nasdaq access terms remain unresolved and State Street restricts reproduction; provider material is local-only and is not redistributed.
+
+Two delistings now have explicit cash amount and completion/payment timing: TIF at $131.50 on 2021-01-07 and SGEN at $229 on 2023-12-14. ABMD remains unresolved because its $380 fixed cash component also included a contingent-value right; recording fixed cash alone would omit a possible outcome. All other unavailable delisting recoveries remain unresolved rather than being replaced by zero or last price. An independent `exchange_calendars` 4.13.2 XNYS session set exactly matches all 7,726 benchmark sessions. The package and generated calendar are hash-bound; the calendar is still not vintage-certified.
+
+The wider run produced 133,141 feature rows: 121,291 usable and 11,850 excluded. It produced 91,546 matured and 29,745 unresolved labels. Unresolved reasons are 28,605 missing cash-action payment dates, one unavailable/stale cash-action FX observation, 966 incomplete final horizons, 160 missing exits or explicit recovery and 13 unavailable entry prices. There are 4,367 evidenced dividends, 32,857 unresolved dividends, two evidenced delistings and 107 unresolved delistings. All 28,606 cash-action-affected unresolved labels remain in the label artifact; zero were dropped based on their outcome.
+
+The dated primary-listing/common-stock source gap remains a versioned development assumption over 822 retained intervals. Its measured impact is total: removing the assumption excludes all 133,141 feature rows and all 121,291 attempted labels. It therefore blocks qualification and is not presented as innocuous metadata.
+
+Matured labels span 10,045 days and populate 17 nonempty folds. Folds 0–8 have every expected monthly decision after actual-interval purging, giving nine temporally protocol-ready 8/2/1 folds. This closes the history-length condition, but not label completeness: 28,606 unresolved cash-action labels would still be omitted from training assignments. The initial closure report therefore recorded `r3_3_development_training_permitted: false`. No model was fitted or evaluated.
+
+## R3.2 explicit closure decision — 2026-09-28
+
+The user subsequently decided to move on without cash-action completeness, verified withholding, dated primary/common-stock classification, complete delisting recovery or vintage certification. The decision is encoded in `config.r3.yaml` and the final materialization report as `proceed_with_open_label_evidence`. It does not change any source-audit flag, fill a missing label, resolve a limitation, make unresolved rows trainable or permit qualification.
+
+The scope decision waives those limitations only as blockers to later R3.3 development. The non-waived safety conditions still pass: nine registered 8/2/1 folds are temporally complete, and zero cash-action rows were dropped from the label artifact based on outcome. The final report therefore records `r3_2_phase_closed: true`, no remaining development-training blockers, `r3_3_development_training_permitted: true`, `r3_3_started: false` and `qualification_permitted: false`. R3.2 has no remaining required implementation tasks under this scope; the evidence limitations remain mandatory disclosures in every later experiment.

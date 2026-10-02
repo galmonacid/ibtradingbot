@@ -12,7 +12,8 @@ dependencies = ["PyYAML>=6.0.2"]
 
 [project.optional-dependencies]
 public-data = ["pitindex==0.2.1", "yfinance==1.7.0"]
-historical-data = ["pyarrow>=18.0,<24"]
+historical-data = ["exchange-calendars>=4.13,<5", "openpyxl>=3.1,<4", "pyarrow>=18.0,<24"]
+research = ["numpy>=2.0,<3", "scikit-learn>=1.7,<1.9"]
 dev = [
   "build>=1.2",
   "mypy>=1.13",
@@ -33,6 +34,11 @@ momentum-git-source-snapshot = "src.cli.git_source_snapshot:main"
 momentum-tiingo-plan = "src.cli.tiingo_plan:main"
 momentum-native-validation = "src.cli.native_validation:main"
 momentum-v2-validation = "src.cli.v2_validation:main"
+momentum-r3-feasibility = "src.cli.r3_feasibility:main"
+momentum-r3-contract = "src.cli.r3_contract:main"
+momentum-r3-dataset = "src.cli.r3_dataset:main"
+momentum-r3-evidence = "src.cli.r3_evidence:main"
+momentum-r3-development = "src.cli.r3_development:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]

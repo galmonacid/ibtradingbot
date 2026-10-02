@@ -1,0 +1,66 @@
+# R3.2 bounded offline research contract. False evidence flags are intentional.
+strategy_version: r3.2-contract-v1
+initial_capital_gbp: 3000.0
+target_profit_gbp: 300.0
+target_return: 0.10
+target_positions: 4
+incumbent_rank: 8
+max_holdings: 5
+cash_buffer: 0.02
+max_position_weight: 0.30
+soft_drawdown: 0.10
+hard_drawdown: 0.15
+soft_position_weight: 0.15
+volatility_ceiling: 0.12
+resize_band: 0.03
+minimum_price_usd: 10.0
+liquidity_min_usd: 20000000.0
+capacity_fraction: 0.0001
+round_trip_cost_ceiling: 0.01
+market_sma_sessions: 200
+feature_version: r3-stock-month-v1
+label_version: r3-gbp-open-to-open-excess-v1
+transform_version: r3-training-only-v1
+seed: 20260926
+initial_train_years: 8
+validation_years: 2
+test_years: 1
+step_years: 1
+purge_sessions: 31
+refit_months: 3
+# Development-only retrospective ECB assumption; not an executable FX quote.
+max_fx_age_days: 6
+
+candidates:
+  - {candidate_id: R3-M, family: momentum}
+  - {candidate_id: R3-L-a1, family: ridge, alpha: 1.0}
+  - {candidate_id: R3-L-a10, family: ridge, alpha: 10.0}
+  - {candidate_id: R3-L-a100, family: ridge, alpha: 100.0}
+  - {candidate_id: R3-T-l7, family: hist_gradient_boosting, max_leaf_nodes: 7}
+  - {candidate_id: R3-T-l15, family: hist_gradient_boosting, max_leaf_nodes: 15}
+
+sensitivities:
+  - {sensitivity_id: positions-3, axis: target_positions, value: 3}
+  - {sensitivity_id: positions-5, axis: target_positions, value: 5}
+  - {sensitivity_id: volatility-10pct, axis: volatility_ceiling, value: 0.10}
+  - {sensitivity_id: volatility-14pct, axis: volatility_ceiling, value: 0.14}
+  - {sensitivity_id: market-sma-160, axis: market_sma_sessions, value: 160}
+  - {sensitivity_id: market-sma-240, axis: market_sma_sessions, value: 240}
+  - {sensitivity_id: liquidity-10m, axis: liquidity_min_usd, value: 10000000.0}
+  - {sensitivity_id: liquidity-50m, axis: liquidity_min_usd, value: 50000000.0}
+
+# R3.1 was closed by scope decision, not accepted on evidence. These blockers
+# carry forward and make R3 readiness fail closed.
+r3_1_phase_closed: true
+r3_1_research_accepted: false
+account_tariff_verified: false
+account_permissions_verified: false
+operating_costs_verified: false
+data_qualification_gaps_closed: false
+
+# User governance decision: close R3.2 and permit later R3.3 development while
+# preserving every open evidence limitation. This does not permit qualification,
+# start R3.3, train a model, or authorize execution.
+r3_2_scope_decision: proceed_with_open_label_evidence
+r3_2_scope_decision_recorded_at: "2026-09-28"
+r3_2_scope_decision_note: "Close R3.2 and permit R3.3 development despite recorded cash-action completeness, withholding, classification, delisting recovery, and vintage-certification limitations; do not start R3.3 yet."

@@ -1,0 +1,13 @@
+# R3.3 development-only simulator assumptions. These are not verified tariffs.
+contract_version: r3.3-development-v1
+commission_per_share_usd: 0.005
+minimum_commission_usd: 1.0
+slippage_bps: 5.0
+fx_friction_bps: 5.0
+conversion_bps: 3.0
+monthly_account_fee_gbp: 3.0
+annual_operating_cost_gbp: 0.0
+liquidation_reserve_gbp: 5.03
+bootstrap_paths: 2000
+paired_block_months: 12
+

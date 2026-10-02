@@ -1,0 +1,39 @@
+# R3.1 offline economics contract. Null evidence/costs deliberately block acceptance.
+strategy_version: r3.1-feasibility-v1
+initial_capital_gbp: 3000.0
+target_profit_gbp: 300.0
+target_positions: 4
+cash_buffer: 0.02
+max_position_weight: 0.30
+volatility_ceiling: 0.12
+minimum_price_usd: 10.0
+legacy_liquidity_usd: 500000000.0
+r3_liquidity_usd: 20000000.0
+capacity_fraction: 0.0001
+legacy_min_order_gbp: 150.0
+round_trip_cost_ceiling: 0.01
+commission_per_share_usd: 0.005
+commission_min_usd: 1.0
+slippage_bps: 5.0
+fx_friction_bps: 5.0
+conversion_bps: 3.0
+monthly_account_minimum_gbp: 3.0
+
+# User-directed planning assumptions, not documentary account evidence.
+annual_data_gbp: 0.0
+annual_hosting_gbp: 0.0
+annual_software_gbp: 0.0
+research_cost_from_capital_gbp: 0.0
+commission_offset_treatment: no_offset_full_monthly_minimum
+whole_share_us_stocks_assumed_permitted: true
+account_tariff_evidence: "Planning assumption checked against public IBKR UK pages on 2026-09-27: adult ISA monthly minimum activity fee £3; no commission offset assumed; US stock commissions modeled separately."
+account_permissions_evidence: "Planning assumption checked against the public IBKR UK ISA overview on 2026-09-27: cash-only ISA with global-market access; whole-share eligible US stocks assumed permitted; fractional shares not assumed."
+account_tariff_verified: false
+account_permissions_verified: false
+operating_costs_verified: false
+fractional_shares: false
+
+# User governance decision: close R3.1 while preserving every evidence blocker.
+scope_decision: proceed_with_open_evidence
+scope_decision_recorded_at: "2026-09-27"
+scope_decision_note: "Proceed to R3.2 despite the four recorded open points; this does not resolve research acceptance, qualification, or execution readiness."
