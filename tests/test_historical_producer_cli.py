@@ -4,12 +4,15 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 from src.cli import historical_producer
 from src.data.tiingo import TiingoAcquisitionResult
 
 
-def test_cli_uses_named_environment_without_printing_token(
-    tmp_path: Path, monkeypatch: object, capsys: object
+@pytest.mark.parametrize("source", ["environment", "file"])
+def test_cli_uses_credentials_without_printing_token(
+    tmp_path: Path, monkeypatch: object, capsys: object, source: str
 ) -> None:
     plan = tmp_path / "requests.json"
     plan.write_text(
@@ -35,7 +38,12 @@ def test_cli_uses_named_environment_without_printing_token(
         seen.update(kwargs)
         return TiingoAcquisitionResult(manifest, 1, 0, 0)
 
-    monkeypatch.setenv("SAFE_TOKEN_NAME", "secret-value")  # type: ignore[attr-defined]
+    credentials = tmp_path / "credentials.local.toml"
+    credentials.write_text('[tiingo]\napi_token = "secret-value"\n')
+    if source == "environment":
+        monkeypatch.setenv("SAFE_TOKEN_NAME", "secret-value")  # type: ignore[attr-defined]
+    else:
+        monkeypatch.delenv("SAFE_TOKEN_NAME", raising=False)  # type: ignore[attr-defined]
     monkeypatch.setattr(historical_producer, "acquire_tiingo_extracts", fake)  # type: ignore[attr-defined]
     monkeypatch.setattr(  # type: ignore[attr-defined]
         sys,
@@ -48,6 +56,8 @@ def test_cli_uses_named_environment_without_printing_token(
             str(output),
             "--token-environment",
             "SAFE_TOKEN_NAME",
+            "--credentials-file",
+            str(credentials),
             "--plan",
             "paid",
             "--licence",
@@ -57,4 +67,5 @@ def test_cli_uses_named_environment_without_printing_token(
     assert historical_producer.main() == 0
     captured = capsys.readouterr()  # type: ignore[attr-defined]
     assert "secret-value" not in captured.out
+    assert "secret-value" not in captured.err
     assert seen["token"] == "secret-value"

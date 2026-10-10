@@ -25,3 +25,5 @@ logs/
 .env.*
 !config.example.yaml
 config/*.local.yaml
+
+config/*.local.toml

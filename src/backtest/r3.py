@@ -77,6 +77,7 @@ class R3Fill:
     fx_friction_gbp: float
     conversion_gbp: float
     mandatory: bool
+    reference_notional_gbp: float
 
     @property
     def trading_cost_gbp(self) -> float:
@@ -131,6 +132,17 @@ class R3SimulationResult:
         value = asdict(self)
         value.pop("fills")
         value.pop("nav")
+        traded_notional = math.fsum(row.reference_notional_gbp for row in self.fills)
+        value["fill_count"] = len(self.fills)
+        value["mandatory_fill_count"] = sum(row.mandatory for row in self.fills)
+        value["traded_notional_gbp"] = traded_notional
+        value["turnover_on_initial_capital"] = traded_notional / self.initial_capital_gbp
+        value["mean_cash_weight"] = (
+            None if self.mean_exposure is None else 1.0 - self.mean_exposure
+        )
+        value["halted_fraction"] = (
+            self.halted_sessions / len(self.nav) if self.nav else None
+        )
         return value
 
 
@@ -246,6 +258,7 @@ def simulate_r3_account(
     *,
     candidate_id: str,
     scores_by_decision: Mapping[date, Mapping[str, float]],
+    eligible_by_decision: Mapping[date, frozenset[str]],
     market: R3MarketData,
     config: R3Config,
     development: R3DevelopmentConfig,
@@ -255,6 +268,8 @@ def simulate_r3_account(
     continuous: bool = False,
 ) -> R3SimulationResult:
     """Run one causal account; score changes are the only candidate-specific input."""
+    if set(scores_by_decision) - set(eligible_by_decision):
+        raise ValueError("scores require an explicit contemporaneous eligibility contract")
     if first_decision not in market.sessions:
         raise ValueError("first decision must be an exchange session")
     first_index = market.sessions.index(first_decision) + 1
@@ -296,6 +311,7 @@ def simulate_r3_account(
     skips: defaultdict[str, int] = defaultdict(int)
     receivables: list[_Receivable] = []
     pending_targets: tuple[date, dict[str, float], set[str]] | None = None
+    pending_eligibility_exits: tuple[date, set[str]] | None = None
     pending_soft_reduction = False
     reductions_only = False
     regime_ceiling = 0.0
@@ -329,6 +345,16 @@ def simulate_r3_account(
     # The first registered signal exists before funding/execution; seed its
     # next-session plan without pretending it was observed on the fill date.
     initial_scores = scores_by_decision.get(first_decision)
+    initial_eligible = eligible_by_decision.get(first_decision)
+    if initial_eligible is not None:
+        initial_ineligible = set(holdings) - set(initial_eligible)
+        if initial_ineligible:
+            pending_eligibility_exits = (first_decision, initial_ineligible)
+    if initial_eligible is not None and (
+        initial_scores is None or set(initial_scores) != set(initial_eligible)
+    ):
+        skips["missing_model_output_blocks_increase"] += 1
+        initial_scores = None
     benchmark = bars.get(market.benchmark_id, {})
     decision_index = market.sessions.index(first_decision)
     regime_history = market.sessions[
@@ -347,7 +373,7 @@ def simulate_r3_account(
             else 0.0
         )
         regime_valid = True
-    if initial_scores is not None and regime_valid and regime_ceiling > 0:
+    if initial_scores and regime_valid and regime_ceiling > 0:
         ranked = tuple(
             sorted(initial_scores, key=lambda key: (-initial_scores[key], key))
         )
@@ -465,6 +491,7 @@ def simulate_r3_account(
                 fx_friction,
                 conversion,
                 mandatory,
+                reference_gbp,
             )
         )
         return True
@@ -539,6 +566,26 @@ def simulate_r3_account(
             account_fees += fee
             first_fee_month = month
 
+        if pending_eligibility_exits is not None:
+            exit_decision, security_ids = pending_eligibility_exits
+            if pending_targets is None:
+                for security_id in sorted(security_ids):
+                    shares = holdings.get(security_id, 0)
+                    if shares > 0:
+                        trade(day, exit_decision, security_id, -shares, True)
+            else:
+                target_decision, requested, mandatory = pending_targets
+                pending_targets = (
+                    target_decision,
+                    {
+                        security_id: weight
+                        for security_id, weight in requested.items()
+                        if security_id not in security_ids
+                    },
+                    mandatory | security_ids,
+                )
+            pending_eligibility_exits = None
+
         if pending_targets is not None:
             decision, requested, mandatory = pending_targets
             open_fx = rate(day, time(9, 30))
@@ -607,56 +654,68 @@ def simulate_r3_account(
             else:
                 regime_valid = False
 
-        # Month-end scoring and target construction. Missing/stale model output blocks increases.
-        if day in scores_by_decision and not hard:
-            scores = scores_by_decision[day]
-            ranked = tuple(sorted(scores, key=lambda key: (-scores[key], key)))
-            selected = _select(ranked, holdings, config)
-            mandatory = set(holdings) - set(scores)
-            if not regime_valid:
-                skips["missing_regime_blocks_increase"] += 1
-                targets = {
-                    security_id: 0.0 for security_id in holdings if security_id in scores
-                }
-            elif regime_ceiling == 0:
-                targets = {}
-                mandatory = set(holdings)
+        # Month-end eligibility is independent of labels and model output. Genuine
+        # ineligibility exits; missing/stale output blocks model-driven changes.
+        if day in eligible_by_decision and not hard:
+            eligible = eligible_by_decision[day]
+            ineligible_holdings = set(holdings) - eligible
+            if ineligible_holdings:
+                pending_eligibility_exits = (day, ineligible_holdings)
+            scores = scores_by_decision.get(day)
+            if scores is None or set(scores) != set(eligible):
+                skips["missing_model_output_blocks_increase"] += 1
             else:
-                day_index = market.sessions.index(day)
-                history_sessions = market.sessions[
-                    max(0, day_index - 63) : day_index + 1
-                ]
-                histories = {
-                    security_id: [bars[security_id][x].adjusted_close for x in history_sessions]
-                    for security_id in selected
-                    if all(x in bars.get(security_id, {}) for x in history_sessions)
-                }
-                if len(histories) != len(selected):
-                    skips["missing_covariance_blocks_increase"] += 1
+                ranked = tuple(sorted(scores, key=lambda key: (-scores[key], key)))
+                selected = _select(ranked, holdings, config)
+                mandatory = set(ineligible_holdings)
+                if not regime_valid:
+                    skips["missing_regime_blocks_increase"] += 1
+                    targets = {
+                        security_id: 0.0 for security_id in holdings if security_id in scores
+                    }
+                elif regime_ceiling == 0:
                     targets = {}
+                    mandatory = set(holdings)
                 else:
-                    covariance = estimate_dual_covariance(histories)
-                    targets = build_v2_targets(
-                        selected,
-                        covariance,
-                        regime_ceiling=regime_ceiling,
-                        cash_buffer=config.cash_buffer,
-                        target_annual_volatility=config.volatility_ceiling,
-                        max_position_weight=(
-                            config.soft_position_weight if soft else config.max_position_weight
-                        ),
-                        previous_target_gross=(
-                            sum(
-                                shares * bars[security_id][day].close_usd * rate(day, time(16))
-                                / equity(day, "close_usd")
-                                for security_id, shares in holdings.items()
-                            )
-                            if soft and holdings
-                            else None
-                        ),
-                    )
-                mandatory |= set(holdings) - set(targets)
-            pending_targets = (day, targets, mandatory)
+                    day_index = market.sessions.index(day)
+                    history_sessions = market.sessions[
+                        max(0, day_index - 63) : day_index + 1
+                    ]
+                    histories = {
+                        security_id: [bars[security_id][x].adjusted_close for x in history_sessions]
+                        for security_id in selected
+                        if all(x in bars.get(security_id, {}) for x in history_sessions)
+                    }
+                    if len(histories) != len(selected):
+                        skips["missing_covariance_blocks_increase"] += 1
+                        targets = {}
+                    else:
+                        covariance = estimate_dual_covariance(histories)
+                        targets = build_v2_targets(
+                            selected,
+                            covariance,
+                            regime_ceiling=regime_ceiling,
+                            cash_buffer=config.cash_buffer,
+                            target_annual_volatility=config.volatility_ceiling,
+                            max_position_weight=(
+                                config.soft_position_weight
+                                if soft
+                                else config.max_position_weight
+                            ),
+                            previous_target_gross=(
+                                sum(
+                                    shares
+                                    * bars[security_id][day].close_usd
+                                    * rate(day, time(16))
+                                    / equity(day, "close_usd")
+                                    for security_id, shares in holdings.items()
+                                )
+                                if soft and holdings
+                                else None
+                            ),
+                        )
+                    mandatory |= set(holdings) - set(targets)
+                pending_targets = (day, targets, mandatory)
 
         try:
             close_nav = equity(day, "close_usd")

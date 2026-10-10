@@ -1,8 +1,10 @@
 # Architecture and migration
 
+2026-10-10: [Fundamental feature engineering](FUNDAMENTAL_FEATURE_AUDIT.md) adds four causal issuer-level ratio primitives and a coverage CLI. They are separate from the old R3 feature schema and have not entered a model or canonical dataset. Historical security joins and full-universe enriched readiness remain unverified.
+
 ## Existing implementation
 
-`src/data` provides source/canonical/PIT/FX tooling. `src/features`, `src/strategy` and `src/portfolio` retain V1/V2 calculations. `src/backtest/v2.py` and `v2_execution.py` retain legacy accounting. R3.1 supplies the separate feasibility audit; R3.2 supplies typed registration, causal materialization, purged folds and exact one-year accounting. R3.3 adds `src/learning/r3.py`, `src/backtest/r3.py`, `src/research/r3_development.py`, `src/config/r3_development.py` and `src/cli/r3_development.py` for the bounded local-CPU learner and common development simulator. Generated fitted models and reports are ignored development evidence. No broker/live package or qualification wrapper exists.
+`src/data` provides source/canonical/PIT/FX tooling. `src/features`, `src/strategy` and `src/portfolio` retain V1/V2 calculations. `src/backtest/v2.py` and `v2_execution.py` retain legacy accounting. R3.1 supplies the separate economics feasibility audit; R3.2 supplies typed registration, causal materialization, purged folds and exact one-year accounting. R3.3 adds the bounded local-CPU learner and common development simulator. Next-cycle Step 3 adds `src/config/r3_step3.py`, `src/research/r3_source_feasibility.py` and `src/cli/r3_step3_feasibility.py` for bounded, immutable source auditing only. The post-stop `r3_post_step3` config/research/CLI path verifies evidence and emits remediation/governance records; it imports no learning, strategy, portfolio, simulation or backtest module. Neither gate produces a learner, score or Step 4 register. Generated source responses and reports are ignored development evidence. No broker/live package or qualification wrapper exists.
 
 Installed project requirements specify Python >=3.12 and PyYAML, with optional historical-data, development and `research` extras. The research extra bounds NumPy to 2.x and scikit-learn to 1.7–1.8; the evidence run used NumPy 2.5.3 and scikit-learn 1.8.0. Existing public-data extras remain exploratory and do not establish admissible data.
 
@@ -34,6 +36,8 @@ Preserve legacy tests. Reuse pure primitives after checking their assumptions; d
 Old reports bind Markdown hashes. Rewriting specifications intentionally changes those identities. Reproduce at the original Git revision in an isolated checkout with original spec files and unchanged artifact manifests. Do not replace old hashes, re-sign evidence or supply the new R3 spec to the V2 command as if it described that run.
 
 ## Provenance and verification
+
+The bounded identity-remediation utility `src/data/r3_identity.py` extracts source-bound inline SEC cover observations. `python -m src.cli.r3_identity_audit` verifies local document/acceptance hashes and writes an immutable offline audit. It neither modifies canonical security identities nor supplies features to training. See [source remediation](SOURCE_REMEDIATION.md) for its supported cases and limitations.
 
 Every run binds Git commit and actual tree, configuration, raw/canonical/universe/calendar/FX hashes, tariff/cost budget, feature and label versions, preprocessing, split definitions, model artifact hash, dependency environment, seed and UTC timestamp. Exact row ordering and tie-breaking must be deterministic. Keep datasets, fitted models, run reports and credentials ignored.
 

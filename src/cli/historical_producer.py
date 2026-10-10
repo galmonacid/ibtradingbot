@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from datetime import date, datetime
 from pathlib import Path
 
+from src.config.credentials import DEFAULT_CREDENTIALS_FILE, load_tiingo_token
 from src.data.tiingo import (
     TiingoAcquisitionError,
     TiingoRequest,
@@ -54,6 +54,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--request-plan", type=Path, required=True)
     parser.add_argument("--output-directory", type=Path, required=True)
     parser.add_argument("--token-environment", default="TIINGO_API_TOKEN")
+    parser.add_argument(
+        "--credentials-file", type=Path, default=DEFAULT_CREDENTIALS_FILE,
+        help="Local TOML credentials; used when the token environment variable is empty",
+    )
     parser.add_argument("--plan", required=True)
     parser.add_argument("--api-version", default="v1")
     parser.add_argument("--licence", required=True, help="Reviewed Tiingo licence/terms label")
@@ -68,7 +72,9 @@ def main() -> int:
     args = _parser().parse_args()
     try:
         when = datetime.fromisoformat(args.retrieved_at) if args.retrieved_at else None
-        token = os.environ.get(args.token_environment, "")
+        token = load_tiingo_token(
+            environment_name=args.token_environment, credentials_file=args.credentials_file
+        )
         result = acquire_tiingo_extracts(
             _requests(args.request_plan),
             args.output_directory,

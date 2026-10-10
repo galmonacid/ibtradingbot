@@ -119,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
     evaluated_dates = sorted(
         {
             decision
-            for (fold, split), keys in dataset.split_keys.items()
+            for (fold, split), keys in dataset.scoring_keys.items()
             if fold in dataset.ready_folds and split in ("validation", "test")
             for _, decision in keys
         }

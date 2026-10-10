@@ -1,0 +1,29 @@
+# Step 3 source-feasibility contract. This freezes source/sample choices only;
+# it does not authorize model fitting, scoring, simulation, or Step 4.
+contract_version: r3-step3-source-feasibility-v1
+run_timestamp: "2026-10-02T17:10:11+00:00"
+sample_seed: 20261002
+processing_latency_hours: 24
+required_protocol_folds: 9
+initial_train_years: 8
+validation_years: 2
+test_years: 1
+step_years: 1
+purge_sessions: 31
+source_request_limit: 64
+sec_user_agent: "IB Trading Bot research audit contact: local-research@example.invalid"
+corrected_dataset_identity: bc01ebab574bb847d46781b090b01cd58c6757e3ed3b2ef99d39f052f209259a
+corrected_scoring_sha256: 8f74da29f3b94e45ab92931a6e77b328ff758b3a52561a86f802851311e9f997
+corrected_report_sha256: 2f3a4f6035b915203eed5ecc1cc6a4a5d5b6129010a932f42d86791c291b0dba
+sample:
+  - {cik: "0000320193", issuer: Apple Inc., cases: [stable_identity, amended_filings, unit_and_context_duplicates], security_ids: [IC-US-15ea23217745b13c]}
+  - {cik: "0000789019", issuer: Microsoft Corp., cases: [stable_identity, amended_filings, different_fiscal_year], security_ids: [IC-US-adca1c049832ae84]}
+  - {cik: "0001652044", issuer: Alphabet Inc., cases: [multiple_share_classes, duplicate_issuer_join], security_ids: [IC-US-1b565bc34cc7ad4d, IC-US-f260b973e756018f]}
+  - {cik: "0001326801", issuer: Meta Platforms Inc., cases: [ticker_and_name_change, duplicate_security_history], security_ids: [IC-US-63aa8d99585c7f98, IC-US-cb012790a1db93bf]}
+  - {cik: "0001067983", issuer: Berkshire Hathaway Inc., cases: [multiple_share_classes, symbol_normalization_conflict], security_ids: [IC-US-066d2b46d7ae75f1, IC-US-c17dca0bffde127c]}
+  - {cik: "0000909832", issuer: Costco Wholesale Corp., cases: [different_fiscal_year, year_to_date_facts], security_ids: [IC-US-5ba4663da77d616c]}
+  - {cik: "0000034088", issuer: Exxon Mobil Corp., cases: [negative_earnings_or_cash_flow, conflicting_concepts], security_ids: [IC-US-7e91b0cf8a2e0136]}
+  - {cik: "0000012927", issuer: Boeing Co., cases: [negative_earnings_or_cash_flow, amended_filings], security_ids: [IC-US-305db138a2cc6132]}
+  - {cik: "0000040545", issuer: General Electric Co., cases: [restatements, unit_changes, corporate_reorganization], security_ids: [IC-US-7739304b4a1b9642]}
+  - {cik: "0000718877", issuer: Activision Blizzard Inc., cases: [acquisition, delisting], security_ids: [IC-US-8a03390100c6812f]}
+  - {cik: "0001418091", issuer: Twitter Inc., cases: [acquisition, delisting], security_ids: [IC-US-e0fc08bd126c231e]}

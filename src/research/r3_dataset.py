@@ -34,7 +34,12 @@ from src.validation.r3_register import (
     R3ExperimentRegister,
     preregister_r3,
 )
-from src.validation.r3_splits import R3SplitAssignment, build_r3_split_assignments
+from src.validation.r3_splits import (
+    R3ScoringAssignment,
+    R3SplitAssignment,
+    build_r3_scoring_assignments,
+    build_r3_split_assignments,
+)
 from src.validation.walk_forward import build_expanding_windows
 
 
@@ -59,6 +64,7 @@ class R3Materialization:
     feature_rows: tuple[R3FeatureRow, ...]
     labels: tuple[R3Label, ...]
     splits: tuple[R3SplitAssignment, ...]
+    scoring: tuple[R3ScoringAssignment, ...]
     register: R3ExperimentRegister
     report: dict[str, Any]
 
@@ -96,6 +102,53 @@ def _policy_hash(policy: Mapping[str, object]) -> str:
     return hashlib.sha256(
         json.dumps(content, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
+
+
+def _label_coverage(
+    labels: Sequence[R3Label],
+    actions: Sequence[R3Action],
+    *,
+    as_of: datetime,
+) -> dict[str, object]:
+    """Report outcome availability without using it to define scoring eligibility."""
+    dividends_by_security: defaultdict[str, list[datetime]] = defaultdict(list)
+    for action in actions:
+        if action.action_type == "dividend":
+            dividends_by_security[action.security_id].append(action.effective_at)
+
+    def available(label: R3Label) -> bool:
+        return (
+            label.matured
+            and label.available_at is not None
+            and label.available_at <= as_of
+        )
+
+    def grouped(key_values: Sequence[tuple[str, R3Label]]) -> dict[str, dict[str, int]]:
+        counts: defaultdict[str, Counter[str]] = defaultdict(Counter)
+        for key, label in key_values:
+            counts[key]["available"] += int(available(label))
+            counts[key]["unresolved"] += int(not available(label))
+            counts[key]["total"] += 1
+        return {key: dict(sorted(value.items())) for key, value in sorted(counts.items())}
+
+    dividend_groups: list[tuple[str, R3Label]] = []
+    for label in labels:
+        affected = any(
+            label.entry_at <= effective_at < label.exit_at
+            for effective_at in dividends_by_security[label.security_id]
+        )
+        dividend_groups.append(
+            ("dividend_affected" if affected else "no_dividend_in_label_interval", label)
+        )
+    return {
+        "definition": "label value and availability timestamp present no later than run_timestamp",
+        "by_decision_date": grouped(
+            [(label.decision_date.isoformat(), label) for label in labels]
+        ),
+        "by_security_id": grouped([(label.security_id, label) for label in labels]),
+        "by_dividend_status": grouped(dividend_groups),
+        "sector_status": "unavailable_no_point_in_time_sector_metadata",
+    }
 
 
 def _source_rows(
@@ -272,6 +325,15 @@ def build_r3_materialization(
         as_of=run_timestamp,
         purge_sessions=config.purge_sessions,
     )
+    scoring = build_r3_scoring_assignments(
+        (
+            (row.security_id, row.decision_date)
+            for row in feature_rows
+            if not row.exclusion_reasons
+        ),
+        split_sessions,
+        verified_complete_through=split_sessions[-1],
+    )
     base_register = preregister_r3(config, run_timestamp)
     register = R3ExperimentRegister(
         base_register.registration_version,
@@ -320,6 +382,13 @@ def build_r3_materialization(
     split_counts: defaultdict[int, Counter[str]] = defaultdict(Counter)
     for row in splits:
         split_counts[row.fold_id][row.split] += 1
+    scoring_counts: defaultdict[int, Counter[str]] = defaultdict(Counter)
+    scoring_dates_by_fold_split: defaultdict[tuple[int, str], set[date]] = defaultdict(set)
+    for scoring_row in scoring:
+        scoring_counts[scoring_row.fold_id][scoring_row.split] += 1
+        scoring_dates_by_fold_split[(scoring_row.fold_id, scoring_row.split)].add(
+            scoring_row.decision_date
+        )
     nonempty_folds = tuple(
         fold
         for fold, counts in sorted(split_counts.items())
@@ -400,7 +469,7 @@ def build_r3_materialization(
         scope_override=scope_override,
     )
     report: dict[str, Any] = {
-        "contract": "r3.2-development-dataset-v1",
+        "contract": "r3.2-development-dataset-v2-label-independent-scoring",
         "development_only": True,
         "qualification_permitted": False,
         "r3_3_development_training_permitted": not development_blockers,
@@ -487,14 +556,24 @@ def build_r3_materialization(
                 outcome_conditioned_cash_action_rows_dropped
             ),
             "split_assignments": len(splits),
+            "scoring_assignments": len(scoring),
             "nonempty_split_folds": len(nonempty_folds),
             "protocol_ready_folds": len(protocol_ready_folds),
             "matured_label_span_days": matured_span_days,
         },
         "feature_exclusions": exclusions,
         "label_unresolved_reasons": unresolved,
+        "label_availability_coverage": _label_coverage(
+            labels,
+            actions,
+            as_of=run_timestamp,
+        ),
         "split_counts": {
             str(fold): dict(sorted(counts.items())) for fold, counts in sorted(split_counts.items())
+        },
+        "scoring_counts": {
+            str(fold): dict(sorted(counts.items()))
+            for fold, counts in sorted(scoring_counts.items())
         },
         "nonempty_split_fold_ids": list(nonempty_folds),
         "protocol_ready_fold_ids": list(protocol_ready_folds),
@@ -515,11 +594,34 @@ def build_r3_materialization(
             "split_origin": split_start.isoformat(),
             "all_expected_monthly_decisions_present_after_actual_interval_purge": True,
             "cash_action_completeness_evaluated_separately": True,
+            "same_date_observations_grouped": all(
+                len(
+                    {
+                        row.split
+                        for row in splits
+                        if row.fold_id == fold and row.decision_date == decision
+                    }
+                )
+                == 1
+                for fold in nonempty_folds
+                for decision in {
+                    row.decision_date for row in splits if row.fold_id == fold
+                }
+            ),
+            "scoring_dates_derived_without_labels": True,
+            "scoring_date_coverage": {
+                str(fold): {
+                    split: len(scoring_dates_by_fold_split[(fold, split)])
+                    for split in ("train", "validation", "test")
+                }
+                for fold in sorted(scoring_counts)
+            },
         },
         "feature_names": list(R3_FEATURE_NAMES),
         "notes": [
             "All V1/V2-inspected history remains development data.",
             "Unresolved cash-action outcomes are retained and never assigned to a split.",
+            "Scoring assignments derive only from contemporaneously usable feature rows.",
             "No model fitting, optimization, return simulation or objective claim was performed.",
             (
                 "Removing the versioned primary/common-stock assumption would exclude all "
@@ -527,7 +629,7 @@ def build_r3_materialization(
             ),
         ],
     }
-    return R3Materialization(feature_rows, labels, splits, register, report)
+    return R3Materialization(feature_rows, labels, splits, scoring, register, report)
 
 
 def write_r3_materialization(result: R3Materialization, output_directory: Path) -> dict[str, str]:
@@ -537,7 +639,11 @@ def write_r3_materialization(result: R3Materialization, output_directory: Path) 
         import pyarrow.parquet as pq  # type: ignore[import-untyped]
     except ImportError as error:
         raise ValueError("pyarrow is required for R3 dataset materialization") from error
-    output_directory.mkdir(parents=True, exist_ok=True)
+    if output_directory.exists():
+        raise FileExistsError(
+            f"refusing to overwrite immutable dataset output: {output_directory}"
+        )
+    output_directory.mkdir(parents=True)
     feature_records = []
     for row in result.feature_rows:
         record = {
@@ -556,10 +662,12 @@ def write_r3_materialization(result: R3Materialization, output_directory: Path) 
         feature_records.append(record)
     label_records = [asdict(row) for row in result.labels]
     split_records = [asdict(row) for row in result.splits]
+    scoring_records = [asdict(row) for row in result.scoring]
     paths = {
         "features": output_directory / "features.parquet",
         "labels": output_directory / "labels.parquet",
         "splits": output_directory / "splits.parquet",
+        "scoring": output_directory / "scoring.parquet",
         "register": output_directory / "experiment_register.json",
         "report": output_directory / "materialization_report.json",
     }
@@ -567,6 +675,7 @@ def write_r3_materialization(result: R3Materialization, output_directory: Path) 
         ("features", feature_records),
         ("labels", label_records),
         ("splits", split_records),
+        ("scoring", scoring_records),
     ):
         table = pa.Table.from_pylist(records)
         pq.write_table(table, paths[key], compression="zstd", version="2.6")

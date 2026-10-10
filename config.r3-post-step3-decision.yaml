@@ -1,0 +1,27 @@
+# Post-Step-3 remediation/governance decision contract. This package may
+# describe prerequisites, but it cannot amend the protocol or register Step 4.
+contract_version: r3-post-step3-remediation-decision-v1
+run_timestamp: "2026-10-03T09:00:00+00:00"
+seed: 20261003
+step3_directory: data/local/r3_step3_20261002_feasibility_v7
+step3_package_identity: 71d4edd34fa74901de340b7a33080c8119f8f5cd4170d46c644db500da8dc21f
+step3_failure_register_sha256: eaee6bb71df9f7483ceb2cbbbad80192733f6ce2e3e812ed109634e1fc96e25d
+corrected_dataset_directory: data/local/r3_2_20261002_corrected_v2
+corrected_dataset_identity: bc01ebab574bb847d46781b090b01cd58c6757e3ed3b2ef99d39f052f209259a
+corrected_scoring_sha256: 8f74da29f3b94e45ab92931a6e77b328ff758b3a52561a86f802851311e9f997
+corrected_run_directory: data/local/r3_3_20261002_corrected_v2
+corrected_report_sha256: 2f3a4f6035b915203eed5ecc1cc6a4a5d5b6129010a932f42d86791c291b0dba
+preserved_r3_3_directory: data/local/r3_3_20260929
+preserved_r3_3_report_sha256: 01f80f4357205733a9fe6f2ac92aeff6b3e231ef68c51b93ccce6f7cc379957c
+preserved_r3_3_register_sha256: 66bb3bb9dfb3d43c886d43545719b25bbd7c43a9128776776d318cfc398c350f
+preserved_r3_3_model_manifest_sha256: b83288126534369ee0f6b6d1ec4c1f98c2e60b5f701e0030f5c6dacf9e36c65b
+price_only_start: "1999-01-29"
+sec_sample_start: "2009-07-23"
+required_protocol_folds: 9
+initial_train_years: 8
+validation_years: 2
+test_years: 1
+step_years: 1
+purge_sessions: 31
+protocol_amendment_authorized: false
+step4_authorized: false

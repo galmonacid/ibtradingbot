@@ -1,6 +1,42 @@
 # Execution plan
 
-Decision date: 2026-09-26. Updated 2026-10-01. Current stage: **R3.3 implemented; development failed; stop before R3.4**. R3.1 and R3.2 were closed by explicit scope decisions while their evidence gaps remained open. R3.3 preserves those limitations and supplies no qualification evidence. Prior engineering is retained; V1/V2 investment candidates remain rejected. The objective is >10% all-in GBP return within the first year on initial £3,000: net profit >£300 and terminal wealth >£3,300.
+Decision date: 2026-09-26. Updated 2026-10-10. Current stage: **R3 blocked on historical-data acquisition and dated identity evidence; Step 4 remains unregistered and not ready**. R3.1 and R3.2 were closed by explicit scope decisions while their evidence gaps remained open. R3.3 and its corrected control rerun failed development. Prior engineering is retained; V1/V2 investment candidates remain rejected. The objective is >10% all-in GBP return within the first year on initial £3,000: net profit >£300 and terminal wealth >£3,300.
+
+The user has requested completion of the remaining R3 work. The [current completion record](R3_COMPLETION_PROGRESS.md) documents the full 793-identity universe audit, public-source discovery, pending acquisition needs and the unaltered forward-evidence gates. Offline continuation is authorized; R3 is not complete and no new model has been fitted.
+
+## Fundamental source/feature work — 2026-10-10
+
+The [fundamental feature audit](FUNDAMENTAL_FEATURE_AUDIT.md) records four implemented issuer-level ratios, 25 new public SEC responses, monthly coverage across 19 issuers and one original-filing reconciliation. Tests and real-data reproduction pass. Full-universe historical joins and missing trading histories remain unresolved; this is engineering progress before the Step 4 model registration, not a trained strategy or qualification result.
+
+## Later-period design — 2026-10-07
+
+The user approved this direction. The [separate period design](LATER_PERIOD_DESIGN.md) and `config.r3-later-period.yaml` register a 2010 calendar start, preserving initial 8/2/1 durations, annual steps and 31-session purge requirements. The implemented offline planner verifies exchange sessions and reports six complete calendar folds and existing price-feature coverage. Full-universe fundamentals, identity/history repair and cost/permission gates remain open; no model is fitted or qualified. Continue source remediation against this registered period before the Step 4 candidate budget is frozen.
+
+## Public-source remediation — 2026-10-04
+
+The user's request to continue authorizes the bounded public-source audit described in [SOURCE_REMEDIATION.md](SOURCE_REMEDIATION.md). A tested offline extractor and immutable three-filing audit retain 17 complete cover observations and 22 incomplete contexts. Primary Meta transition evidence and distinct Berkshire/Alphabet share classes are documented without mutating the local security master. SEC accession-level SIC is a candidate industry source requiring original-header and publication/vintage checks; no feature substitution was made.
+
+Package identity is `47409e643d6766e2f6ec156c4bf995a08bdbf72646fb97da033e550fd3d4c0c7`. Old evidence verifies unchanged. The source record contains actual tests/checks and the next research-design choice. Earlier authorization statements below describe the 2026-10-03 checkpoint; bounded remediation no longer needs another approval. Fundamental history, full identity/action coverage and recurring-cost evidence still prevent Step 4 readiness.
+
+The follow-up lineage audit (`fd11ec7676e61c4dace40559cc1e2de8212a3fb31432cd7f48c9fd35ffd41106`) confirms the shadow Meta/BRK.B IDs have no retained bars or membership; failed FB/BRK.B provider requests explain missing histories. GOOG/GOOGL remain distinct across 3,136 overlapping sessions. Acquisition/coverage repair is required; an ID merge cannot recover absent prices. No canonical artifact was modified.
+
+## Post-Step-3 remediation and protocol-decision gate
+
+Package `data/local/r3_post_step3_20261003_decision_v1` is immutable, ignored and content-bound at identity `45ca6a6c89ecd5fd0640d58aa5e91aaec03ac5a2b6ca65d41f5c0dc224cbf394`; its artifact-manifest SHA-256 is `7c6acf6b69edc84cf27204d7e12d5b20cb94af140bae9a06290d664d6038cf1e`. It verified the Step 3 package, corrected dataset/scoring/report and both original and corrected 541-model manifests without rewriting them. A fixed-input reproduction matched byte-for-byte.
+
+The decision register contains exactly three options. Option A stops enriched-feature work and needs no further authority. Option B remediates identity, sector and macro evidence while retaining the existing protocol; it needs explicit new authority and **cannot** solve the SEC pre-2009 history gap. Option C may only propose a separate protocol-amendment decision package after complete evidence remediation and an explicit user decision; no amendment has been executed. Options are governance paths, not return- or investment-ranked candidates.
+
+Blocker dispositions are: SEC coverage unresolved at 0/9 folds; local issuer/security identity not repairable from current evidence; dated sector data rejected pending a separately authorized bounded source audit; ALFRED blocked by an unsupplied registered key with no official no-account bulk route established from frozen documentation; and all non-observed recurring costs retained as unknown. Training-only imputation cannot turn an all-missing pre-coverage era into enriched history. Present-day identity or sector metadata cannot be substituted historically.
+
+No protocol, label, fold, portfolio, risk, source-contract or candidate-budget change occurred. No Step 4 experiment register, fit, score, simulation, backtest, performance comparison, candidate selection, fresh holdout access, broker connection or account change occurred. Step 4 remains unauthorized. The only action available without further authority is Option A/no further enriched-feature work; Options B and C require an explicit future user decision.
+
+Verification: 11/11 focused tests passed; deterministic materialization and its 12-file byte-for-byte reproduction passed; Ruff, strict mypy on the new files, isolated package build, documentation links, diff whitespace, ignore, integrity and secret checks passed. The broader suite recorded 433 passes, five failures and one skip because the active runtime lacks optional sklearn and exchange-calendar dependencies. Full `mypy src` recorded eight existing sklearn import/unused-ignore diagnostics for the same environment reason. These checks neither fitted a model nor changed research evidence; no missing optional dependency was installed merely to obtain a green result.
+
+## Next-cycle Step 3 — source feasibility and preregistration
+
+The separately versioned `r3-step3-source-feasibility-v1` audit is complete. A deterministic 11-issuer SEC sample and 46 public source responses were hash-bound. It retained actual acceptance timestamps plus 24-hour processing latency, later-only amendments/restatements, distinct quarterly/YTD/annual facts, explicit missing/conflicting facts and sample identity failures. The 15,855 retained facts begin causally on 2009-07-23. Because the existing nine folds require complete enriched training history from 1999-01-29, the audit supports 0/9 full folds without backfill.
+
+Causal sector metadata was unavailable; ALFRED vintage observations were not accessed because the official API requires an unsupplied credential; and required sector/macro recurring costs remain unknown. The audit therefore created `r3-step3-failure-register-v1` rather than a Step 4 experiment registration. The next actionable decision is whether to stop this research direction or separately authorize remediation/new protocol design. Do not shorten folds, backfill fundamentals, reinterpret inspected dates as fresh, or start model evaluation from this record.
 
 ## R3.1 — Prove account economics and explain the missed exposure
 
@@ -257,6 +293,32 @@ Top-level artifact SHA-256 values are: development report `01f80f4357205733a9fe6
 Targeted R3 tests passed, followed by 410 full-suite tests. `ruff check .` and strict `mypy src` passed. The isolated package build produced both the sdist and wheel; it required network access to install the declared Hatchling build dependency. Local documentation links, secret-pattern review and `git diff --check` passed.
 
 R3.3 implementation acceptance passes, but research acceptance fails. Per the predeclared stop rule there is no implicit tuning round and R3.4 is not permitted. The next actionable task is a review-only closure decision: preserve the failed register and decide whether to stop active research or explicitly register a materially new research question. It must not reinterpret these results, select a sensitivity neighbor or access a purported fresh holdout.
+
+## Post-R3.3 research direction — 2026-10-02
+
+The user requested a reusable record of the strategy review and guidelines for a subsequent development prompt. [Next research cycle](NEXT_RESEARCH_CYCLE.md) captures the proposed sequence: repair future-label-dependent scoring eligibility, re-establish corrected controls and exposure/cost attribution, audit point-in-time external data, then register a bounded richer-feature Ridge/XGBoost comparison. A slower prediction/holding horizon is a separate optional experiment.
+
+The scoring issue was identified by code inspection; its numerical impact is unmeasured. This qualification accompanies the historical R3.3 implementation-acceptance record above. Original artifacts remain unchanged. This documentation step does not start implementation, reopen the six-trial budget, satisfy research acceptance, or permit R3.4. A subsequent development request should begin with the correction and explicitly register new research before model selection.
+
+### Evaluation repair completed — 2026-10-02
+
+Step 1 of the next research cycle is implemented. A versioned `scoring.parquet` artifact now derives fold/date/security scoring eligibility exclusively from usable contemporaneous feature rows; the existing split artifact remains restricted to matured, availability-safe and interval-purged supervised labels. The R3 development loader requires the corrected v2 contract and hash-binds both artifacts. Scoring, fitting and simulation pass distinct eligibility/prediction inputs, so unresolved future labels remain scoreable, missing model output blocks new model risk without creating an exit, genuine ineligibility can require an exit, and unresolved held valuation continues to fail closed.
+
+Synthetic regression and bounded scoring-to-order integration checks passed. The focused set passed 23 tests; the full suite passed 416 tests; `ruff check .`, `mypy src` and the package build passed. No historical artifact or experiment record was overwritten, and the complete six-candidate comparison was not run. The correction demonstrates evaluator behavior only, not the return objective. Remaining limitations include the recorded point-in-time data/action/tariff gaps and the absence of a corrected real-data attribution run.
+
+At the step 1 checkpoint, the next action was to create a new immutable corrected dataset/run identity and execute step 2's complete controls once. That action is recorded below; the restriction against richer features, XGBoost and policy changes remains in force.
+
+### Corrected controls completed — 2026-10-02
+
+Step 2 of [the next research cycle](NEXT_RESEARCH_CYCLE.md) is complete. Dataset `data/local/r3_2_20261002_corrected_v2` has identity `bc01ebab574bb847d46781b090b01cd58c6757e3ed3b2ef99d39f052f209259a` and scoring SHA-256 `8f74da29f3b94e45ab92931a6e77b328ff758b3a52561a86f802851311e9f997`. Its 121,291 usable feature rows reconcile to 91,546 matured and 29,745 unresolved labels. Scoring assignments are label-independent, the nine registered folds pass actual-interval/31-session purging and same-date grouping, and a fixed-timestamp repeat reproduced every dataset artifact byte-for-byte.
+
+The complete six-control comparison ran once in `data/local/r3_3_20261002_corrected_v2`. Overall annual target attainment was 3/9 Momentum, 0/9 Ridge 1, 0/9 Ridge 10, 3/9 Ridge 100, 2/9 HGB 7 and 1/9 HGB 15. Valid annual-account medians were respectively -1.975435%, 0.264122%, 6.770086%, 7.458705%, 5.394361% and 0.291698%; these survivor medians are not overall attainment rates. Valid annual accounts were 8, 7, 7, 6, 6 and 5 of nine. No candidate supports advancement or ML promotion.
+
+All validation, non-overlapping annual, overlapping monthly and continuous attempts remain in the report with their start date and failure. The correction exposed unresolved held-delisting recoveries, missing held valuations/opens and fractional split residuals that the old label-filtered scoring universe could avoid. Gross-to-net costs, turnover, mandatory fills, exposure, idle cash, halt time, skip reasons and unresolved accruals are explicit. Source/config/dependency hashes match preserved R3.3; features, labels and splits are byte-identical, while the corrected test scoring universe contains 10,087 additional security-date rows. The preserved report lacks per-account scores, selections, mandatory fills and account identifiers, so exact old-side selection pairing is unavailable without rerunning rejected evidence; no such rerun occurred.
+
+Artifact SHA-256 values are report `2f3a4f6035b915203eed5ecc1cc6a4a5d5b6129010a932f42d86791c291b0dba`, completed register `a343096d9ed3f46d6db1e361721f3aadc39d67524a5191b13b83794872fb1bee` and 541-entry model manifest `0aa01c3c497e01d35f5623895a5b6d0b6709474f8de5e5f403d11437dc6824d9`; all referenced model hashes validate. All 544 original R3.3 hashes remain unchanged. The complete numerical record and limitations are in [the step 2 record](NEXT_RESEARCH_CYCLE.md#step-2-corrected-control-record--2026-10-02).
+
+The corrected run remains inspected development evidence and does not demonstrate the objective, qualify a strategy or authorize deployment. Step 3 was subsequently authorized and completed with the source-feasibility stop recorded at the top of this roadmap. Richer features, XGBoost, portfolio-policy changes and another model experiment remain unauthorized.
 
 ## R3.4 — Review, freeze and evaluate unseen observations
 

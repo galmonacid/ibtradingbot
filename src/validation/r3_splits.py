@@ -1,7 +1,8 @@
-"""Date-grouped, matured-label R3 chronological splits."""
+"""R3 chronological training splits and label-independent scoring universes."""
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Literal
@@ -16,6 +17,53 @@ class R3SplitAssignment:
     decision_date: date
     fold_id: int
     split: Literal["train", "validation", "test"]
+
+
+@dataclass(frozen=True)
+class R3ScoringAssignment:
+    security_id: str
+    decision_date: date
+    fold_id: int
+    split: Literal["train", "validation", "test"]
+
+
+def build_r3_scoring_assignments(
+    eligible_feature_keys: Iterable[tuple[str, date]],
+    sessions: tuple[date, ...],
+    *,
+    verified_complete_through: date,
+) -> tuple[R3ScoringAssignment, ...]:
+    """Assign contemporaneously eligible features without consulting outcomes."""
+    windows = build_expanding_windows(
+        sessions,
+        verified_complete_through=verified_complete_through,
+        initial_train_years=8,
+        validation_years=2,
+        test_years=1,
+        step_months=12,
+    )
+    assignments: list[R3ScoringAssignment] = []
+    for security_id, decision_date in sorted(
+        set(eligible_feature_keys), key=lambda row: (row[1], row[0])
+    ):
+        for window in windows:
+            if decision_date in window.train:
+                split: Literal["train", "validation", "test"] = "train"
+            elif decision_date in window.validation:
+                split = "validation"
+            elif decision_date in window.test:
+                split = "test"
+            else:
+                continue
+            assignments.append(
+                R3ScoringAssignment(security_id, decision_date, window.index, split)
+            )
+    return tuple(
+        sorted(
+            assignments,
+            key=lambda row: (row.fold_id, row.split, row.decision_date, row.security_id),
+        )
+    )
 
 
 def build_r3_split_assignments(

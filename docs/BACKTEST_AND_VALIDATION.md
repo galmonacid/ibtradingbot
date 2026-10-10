@@ -1,6 +1,6 @@
 # R3 backtest and validation contract
 
-Status: R3.3 implements the shared development event simulator, cohort summaries and paired ML comparisons. Its fixed run failed the development objective and every ML promotion comparison, and retained fail-closed invalid accounts. The full R3.4 qualification/stress wrapper remains unimplemented and is not permitted after this stop result without a new scope decision. **Existing `assess_deployment_gates` accepts 8% CAGR and must not certify R3.** Historical gate outputs remain unchanged.
+Status: the corrected step 2 control run uses label-independent scoring universes and retains every failed account in overall denominators. It failed the development objective and every ML promotion comparison. Step 3 found 0/9 frozen folds with complete causal enriched history; the post-stop governance package changed no protocol and created no experiment registration. Step 4 and the full R3.4 qualification/stress wrapper remain unimplemented and unauthorized. **Existing `assess_deployment_gates` accepts 8% CAGR and must not certify R3.** Preserved historical gate outputs remain unchanged.
 
 ## Measure the user's objective
 

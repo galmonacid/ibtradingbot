@@ -4,9 +4,15 @@ from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
-from src.config.r3 import CandidateConfig
+from src.config.r3 import CandidateConfig, load_r3_config
 from src.features.r3 import R3_FEATURE_NAMES
 from src.learning.r3 import LearningObservation, fit_r3_model, rank_scores
+from src.research.r3_development import (
+    R3DevelopmentDataset,
+    R3DevelopmentRun,
+    _score_segment,
+    write_r3_development,
+)
 
 
 def _observation(
@@ -92,3 +98,51 @@ def test_future_label_mutation_cannot_change_fitted_model() -> None:
     right = fit_r3_model(candidate, (matured, mutated), training_cutoff=cutoff, fitted_at=cutoff)
     assert left.estimator_sha256 == right.estimator_sha256
 
+
+def test_refits_add_only_labels_matured_by_each_cutoff() -> None:
+    config = load_r3_config(__import__("pathlib").Path("config.r3.yaml"))
+    candidate = CandidateConfig("R3-L-a1", "ridge", alpha=1.0)
+    training = (
+        _observation("A", date(2019, 1, 31), 0.1),
+        _observation("B", date(2019, 1, 31), 0.2),
+    )
+    january = _observation("A", date(2020, 1, 31), 0.3)
+    april = _observation("A", date(2020, 4, 30), 0.4, available_days_later=365)
+    july = _observation("A", date(2020, 7, 31), 0.5, available_days_later=365)
+    observations = training + (january, april, july)
+    training_keys = frozenset((row.security_id, row.decision_date) for row in training)
+    score_keys = frozenset(
+        (row.security_id, row.decision_date) for row in (january, april, july)
+    )
+    dataset = R3DevelopmentDataset(
+        observations=observations,
+        split_keys={(0, "train"): training_keys},
+        scoring_keys={(0, "validation"): score_keys},
+        ready_folds=(0,),
+        dataset_sha256="d" * 64,
+        split_sha256="s" * 64,
+        scoring_sha256="e" * 64,
+        evidence_limitations=(),
+        config_sha256=config.sha256,
+    )
+
+    _, models = _score_segment(
+        candidate,
+        dataset,
+        training_keys=training_keys,
+        score_keys=score_keys,
+        config=config,
+    )
+
+    assert [model.training_rows for model in models] == [2, 3, 3]
+
+
+def test_development_writer_refuses_existing_evidence_directory(tmp_path: object) -> None:
+    from pathlib import Path
+
+    output = Path(str(tmp_path)) / "preserved"
+    output.mkdir()
+    run = R3DevelopmentRun({}, {}, (), ())
+
+    with pytest.raises(FileExistsError, match="refusing to overwrite immutable development"):
+        write_r3_development(run, output)

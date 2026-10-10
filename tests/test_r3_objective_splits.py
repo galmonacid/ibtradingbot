@@ -6,7 +6,10 @@ import pytest
 
 from src.features.r3 import R3Label
 from src.validation.r3_objective import R3WealthPoint, evaluate_r3_objective
-from src.validation.r3_splits import build_r3_split_assignments
+from src.validation.r3_splits import (
+    build_r3_scoring_assignments,
+    build_r3_split_assignments,
+)
 
 
 def test_one_year_endpoint_is_strict_and_cost_bridge_conserves_wealth() -> None:
@@ -113,3 +116,27 @@ def test_splits_keep_dates_together_and_purge_actual_label_overlap() -> None:
     ]
     assert all(row.security_id != "PURGED" for row in first_train)
     assert all(row.security_id != "IMMATURE" for row in assignments)
+
+
+def test_scoring_assignments_keep_same_date_features_independent_of_labels() -> None:
+    sessions = tuple(date(2007, 1, 1) + timedelta(days=index) for index in range(12 * 366))
+    decision = date(2017, 6, 1)
+    keys = (("MATURED", decision), ("UNRESOLVED", decision))
+
+    assignments = build_r3_scoring_assignments(
+        keys,
+        sessions,
+        verified_complete_through=sessions[-1],
+    )
+
+    matching = [row for row in assignments if row.decision_date == decision]
+    assert matching
+    by_fold = {
+        row.fold_id: [member for member in matching if member.fold_id == row.fold_id]
+        for row in matching
+    }
+    assert all(
+        {row.security_id for row in fold_rows} == {"MATURED", "UNRESOLVED"}
+        and len({row.split for row in fold_rows}) == 1
+        for fold_rows in by_fold.values()
+    )

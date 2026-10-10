@@ -1,6 +1,10 @@
 # Data, features and labels
 
-Status: existing V1/V2 data tooling plus an implemented R3.2 observation/label/split contract. No qualification-grade R3 dataset has passed it. Certification is a content-bound claim about specified checks, not proof that historical data is bias-free.
+2026-10-10: [Fundamental feature engineering](FUNDAMENTAL_FEATURE_AUDIT.md) adds four causal issuer-level ratio primitives and a coverage CLI. They are separate from the old R3 feature schema and have not entered a model or canonical dataset. Historical security joins and full-universe enriched readiness remain unverified.
+
+2026-10-04 source update: [SOURCE_REMEDIATION.md](SOURCE_REMEDIATION.md) records the bounded SEC cover audit and candidate historical SIC route. These observations do not yet create historical identity intervals, replace sector definitions, or enter model features. Existing evidence gaps and source-admission rules remain.
+
+Status: R3.2 has a corrected, hash-bound label-independent scoring artifact used by the completed step 2 controls. Step 3 failed enriched-source feasibility, and the post-stop decision package leaves those feature families rejected pending separate authority. The underlying evidence gaps remain and no qualification-grade R3 dataset exists. Certification is a content-bound claim about specified checks, not proof that historical data is bias-free.
 
 ## Existing lineage and unresolved gaps
 
@@ -30,7 +34,21 @@ All candidate models use this initial feature set, with no automated feature sea
 | Liquidity | Log of positive trailing 20-session median raw close times volume |
 | Market state | SPY 21-session return, SPY 20-session volatility, SPY/SMA200-1 |
 
-P denotes total-return-consistent adjusted close. Verify exact inclusive endpoints and minimum warm-up in tests. Missing required inputs excludes the row; no outcome-conditioned imputation. Ridge scaling is fitted on training rows only. Tree models receive the same raw features. No fundamental, sector, news, sentiment or revised macroeconomic data enters the first experiment.
+P denotes total-return-consistent adjusted close. Verify exact inclusive endpoints and minimum warm-up in tests. Missing required inputs excludes the row; no outcome-conditioned imputation. Ridge scaling is fitted on training rows only. Tree models receive the same raw features. No fundamental, sector, news, sentiment or revised macroeconomic data entered the first experiment. The later Step 3 feasibility audit did not add them to a model: its SEC sample begins too late for the frozen protocol, causal sector metadata was unavailable and ALFRED observations were not accessed without a supplied API key.
+
+## Step 3 external-source feasibility — 2026-10-02
+
+The bounded SEC audit retained 15,855 facts for 11 predeclared issuers and 11 concepts, with filing accession and actual acceptance timestamps plus 24 hours of processing latency. Causal sample coverage begins 2009-07-23. Amendments and restatements remain later information; quarterly, YTD, annual and instant contexts are distinct; negative values and missing/conflicting facts are explicit. Three representative primary filings were hash-bound and reconciled for accession, issuer and inline-XBRL structure.
+
+This coverage cannot support the existing nine 8/2/1 folds, all of which require an enriched training history beginning in 1999. The result is 0/9 supported full folds. Alphabet, Meta and Berkshire also expose unresolved CIK-to-local-security ambiguity. Causal sector classifications and historical market-cap inputs were not established. The 28-feature feasibility contract therefore retains only 11 price-derived definitions and rejects all 17 sector/fundamental/valuation/macro additions for this protocol. No performance feature set was selected and no dataset was backfilled.
+
+## Post-Step-3 remediation disposition — 2026-10-03
+
+The decision package preserves the 0/9 result. The 2009-07-23 sampled SEC start is 3,828 days after the 1999-01-29 price-only start. Training-fitted imputation may address sporadic nulls only after causal observations exist; it cannot supply genuine enriched observations for the absent era. Prospective 2009-07-23/2017-07-23/2019-07-23/2020-07-23 boundaries are sample-only calendar lower bounds, not a changed protocol.
+
+The local stable-ID and membership architecture cannot resolve CIK-to-share-class history from current evidence alone. Qualification-grade repair requires dated security/class identifiers; ticker, exchange and issuer/name intervals; merger/reorganization predecessor-successor links; delisting/action evidence; source availability timestamps and hashes; permission records; and tests for simultaneous classes, ticker continuity, aliases, half-open action intervals, prefix invariance and fail-closed conflicts. Present-day metadata and name/ticker matching are prohibited substitutes.
+
+Dated sector classification must include a versioned taxonomy, effective and publication intervals, retained revisions, inactive/delisted coverage, stable identity links and source permissions. It remains rejected under the current protocol. ALFRED vintage observations remain inaccessible without a supplied registered key; the frozen official documentation did not establish a no-account bulk vintage route, and revised FRED history is not a substitute. SEC bounded public access was observed at £0; identity, sector, macro and maintenance costs remain unknown. No enriched data was materialized.
 
 ## Label definition and availability
 

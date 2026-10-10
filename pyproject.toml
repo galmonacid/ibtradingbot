@@ -39,6 +39,8 @@ momentum-r3-contract = "src.cli.r3_contract:main"
 momentum-r3-dataset = "src.cli.r3_dataset:main"
 momentum-r3-evidence = "src.cli.r3_evidence:main"
 momentum-r3-development = "src.cli.r3_development:main"
+momentum-r3-step3-feasibility = "src.cli.r3_step3_feasibility:main"
+momentum-r3-post-step3-decision = "src.cli.r3_post_step3_decision:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]

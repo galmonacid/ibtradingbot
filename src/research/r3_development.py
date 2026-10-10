@@ -8,7 +8,7 @@ import math
 import pickle
 import random
 import statistics
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, time
@@ -26,9 +26,11 @@ from src.learning.r3 import FittedR3Model, LearningObservation, fit_r3_model
 class R3DevelopmentDataset:
     observations: tuple[LearningObservation, ...]
     split_keys: dict[tuple[int, str], frozenset[tuple[str, date]]]
+    scoring_keys: dict[tuple[int, str], frozenset[tuple[str, date]]]
     ready_folds: tuple[int, ...]
     dataset_sha256: str
     split_sha256: str
+    scoring_sha256: str
     evidence_limitations: tuple[str, ...]
     config_sha256: str
 
@@ -55,16 +57,23 @@ def load_r3_development_dataset(directory: Path) -> R3DevelopmentDataset:
     report: object = json.loads(report_path.read_text(encoding="utf-8"))
     if not isinstance(report, dict):
         raise ValueError("R3.2 materialization report must be an object")
+    if report.get("contract") != "r3.2-development-dataset-v2-label-independent-scoring":
+        raise ValueError(
+            "R3 evaluation repair requires a new v2 label-independent scoring artifact"
+        )
     required = {
         "features": directory / "features.parquet",
         "labels": directory / "labels.parquet",
         "splits": directory / "splits.parquet",
+        "scoring": directory / "scoring.parquet",
         "register": directory / "experiment_register.json",
     }
     artifact_hashes = report.get("artifact_sha256")
     if not isinstance(artifact_hashes, dict):
         raise ValueError("R3.2 report lacks artifact identities")
     for name, path in required.items():
+        if not path.is_file():
+            raise ValueError(f"R3.2 {name} artifact is missing")
         if artifact_hashes.get(name) != _sha256(path):
             raise ValueError(f"R3.2 {name} artifact hash mismatch")
     if (
@@ -99,6 +108,21 @@ def load_r3_development_dataset(directory: Path) -> R3DevelopmentDataset:
         split_keys[(int(row["fold_id"]), str(row["split"]))].add(
             (str(row["security_id"]), row["decision_date"])
         )
+    scoring_keys: defaultdict[tuple[int, str], set[tuple[str, date]]] = defaultdict(set)
+    for row in pq.read_table(required["scoring"]).to_pylist():
+        scoring_keys[(int(row["fold_id"]), str(row["split"]))].add(
+            (str(row["security_id"]), row["decision_date"])
+        )
+    observation_keys = {(row.security_id, row.decision_date) for row in observations}
+    if any(not keys <= observation_keys for keys in scoring_keys.values()):
+        raise ValueError("scoring contract contains a key without a usable feature row")
+    labelled_keys = {
+        (row.security_id, row.decision_date)
+        for row in observations
+        if row.target is not None and row.label_available_at is not None
+    }
+    if any(not keys <= labelled_keys for keys in split_keys.values()):
+        raise ValueError("supervised split contains an unresolved or unavailable label")
     counts = report.get("counts")
     dropped_key = "outcome_conditioned_cash_action_rows_dropped_from_label_artifact"
     if not isinstance(counts, dict) or counts.get(dropped_key) != 0:
@@ -110,9 +134,11 @@ def load_r3_development_dataset(directory: Path) -> R3DevelopmentDataset:
     return R3DevelopmentDataset(
         tuple(sorted(observations, key=lambda row: (row.decision_date, row.security_id))),
         {key: frozenset(value) for key, value in split_keys.items()},
+        {key: frozenset(value) for key, value in scoring_keys.items()},
         tuple(int(value) for value in ready),
         str(report["dataset_sha256"]),
         str(artifact_hashes["splits"]),
+        str(artifact_hashes["scoring"]),
         tuple(str(value) for value in limitations),
         str(report["config_sha256"]),
     )
@@ -120,6 +146,15 @@ def load_r3_development_dataset(directory: Path) -> R3DevelopmentDataset:
 
 def _months_between(left: date, right: date) -> int:
     return (right.year - left.year) * 12 + right.month - left.month
+
+
+def _eligible_by_date(
+    keys: frozenset[tuple[str, date]],
+) -> dict[date, frozenset[str]]:
+    by_date: defaultdict[date, set[str]] = defaultdict(set)
+    for security_id, decision_date in keys:
+        by_date[decision_date].add(security_id)
+    return {decision: frozenset(security_ids) for decision, security_ids in by_date.items()}
 
 
 def _score_segment(
@@ -177,26 +212,49 @@ def _score_segment(
 def _aggregate(results: Sequence[R3SimulationResult]) -> dict[str, object]:
     valid = [row for row in results if row.return_12m is not None and row.failure is None]
     values = sorted(row.return_12m for row in valid if row.return_12m is not None)
-    failures = sorted({row.failure for row in results if row.failure is not None})
+    failure_counts = Counter(row.failure for row in results if row.failure is not None)
+    skip_counts: Counter[str] = Counter()
+    for row in results:
+        skip_counts.update(row.skip_reasons)
+    attempted = len(results)
+    common = {
+        "accounts": attempted,
+        "valid_accounts": len(valid),
+        "invalid_accounts": attempted - len(valid),
+        "failure_counts": dict(sorted(failure_counts.items())),
+        "failures": sorted(failure_counts),
+        "skip_reason_counts": dict(sorted(skip_counts.items())),
+        "account_results": [row.summary() for row in results],
+        "development_pass": len(valid) == attempted,
+    }
     if not values:
-        return {
-            "accounts": len(results),
-            "valid_accounts": 0,
-            "failures": failures,
-            "development_pass": False,
-        }
+        return common
     def percentile(fraction: float) -> float:
         return values[round((len(values) - 1) * fraction)]
+    traded_notional = math.fsum(
+        fill.reference_notional_gbp for row in results for fill in row.fills
+    )
     return {
-        "accounts": len(results),
-        "valid_accounts": len(valid),
-        "failures": failures,
-        "target_attainment_frequency": sum(row.target_attained for row in valid) / len(valid),
+        **common,
+        # Invalid attempts remain in all overall frequency denominators. Separate
+        # survivor-only values are retained only as explicitly labelled diagnostics.
+        "target_attainment_frequency": sum(row.target_attained for row in results) / attempted,
+        "valid_only_target_attainment_frequency": (
+            sum(row.target_attained for row in valid) / len(valid)
+        ),
         "loss_frequency": sum(
+            row.return_12m is not None and row.return_12m < 0 for row in valid
+        )
+        / attempted,
+        "valid_only_loss_frequency": sum(
             row.return_12m is not None and row.return_12m < 0 for row in valid
         )
         / len(valid),
         "below_minus_15pct_frequency": (
+            sum(row.return_12m is not None and row.return_12m < -0.15 for row in valid)
+            / attempted
+        ),
+        "valid_only_below_minus_15pct_frequency": (
             sum(row.return_12m is not None and row.return_12m < -0.15 for row in valid)
             / len(valid)
         ),
@@ -209,7 +267,26 @@ def _aggregate(results: Sequence[R3SimulationResult]) -> dict[str, object]:
         "mean_exposure": statistics.fmean(
             float(row.mean_exposure) for row in valid if row.mean_exposure is not None
         ),
-        "fills": sum(len(row.fills) for row in valid),
+        "mean_cash_weight": statistics.fmean(
+            1.0 - float(row.mean_exposure)
+            for row in valid
+            if row.mean_exposure is not None
+        ),
+        "fills": sum(len(row.fills) for row in results),
+        "mandatory_fills": sum(
+            fill.mandatory for row in results for fill in row.fills
+        ),
+        "traded_notional_gbp": traded_notional,
+        "turnover_on_initial_capital": (
+            traded_notional / (attempted * results[0].initial_capital_gbp)
+        ),
+        "halted_sessions": sum(row.halted_sessions for row in results),
+        "halted_session_fraction": (
+            sum(row.halted_sessions for row in results)
+            / sum(len(row.nav) for row in results)
+            if any(row.nav for row in results)
+            else None
+        ),
         "gross_terminal_wealth_gbp": math.fsum(
             float(row.gross_terminal_wealth_gbp) for row in valid
             if row.gross_terminal_wealth_gbp is not None
@@ -228,7 +305,6 @@ def _aggregate(results: Sequence[R3SimulationResult]) -> dict[str, object]:
         "account_fees_gbp": math.fsum(row.account_fees_gbp for row in valid),
         "liquidation_reserve_gbp": math.fsum(row.liquidation_reserve_gbp for row in valid),
         "unresolved_accrual_gbp": math.fsum(row.unresolved_accrual_gbp for row in valid),
-        "development_pass": len(valid) == len(results),
     }
 
 
@@ -325,6 +401,32 @@ def run_r3_development(
 ) -> R3DevelopmentRun:
     if run_timestamp.tzinfo is None:
         raise ValueError("run timestamp must be timezone-aware")
+    required_segments = {
+        (fold, split)
+        for fold in dataset.ready_folds
+        for split in ("train", "validation", "test")
+    }
+    if not required_segments <= set(dataset.split_keys):
+        raise ValueError("supervised split contract is incomplete for a protocol-ready fold")
+    if not required_segments <= set(dataset.scoring_keys):
+        raise ValueError("scoring-universe contract is incomplete for a protocol-ready fold")
+    scoring_audit: dict[str, object] = {}
+    for fold in dataset.ready_folds:
+        for split in ("validation", "test"):
+            keys = dataset.scoring_keys[(fold, split)]
+            dates = sorted({decision for _, decision in keys})
+            if not dates:
+                raise ValueError("registered scoring segment contains no decision dates")
+            payload = sorted((security_id, decision.isoformat()) for security_id, decision in keys)
+            scoring_audit[f"{fold}:{split}"] = {
+                "decision_dates": len(dates),
+                "eligible_security_date_rows": len(keys),
+                "first_decision_date": dates[0].isoformat(),
+                "last_decision_date": dates[-1].isoformat(),
+                "universe_sha256": hashlib.sha256(
+                    json.dumps(payload, separators=(",", ":")).encode()
+                ).hexdigest(),
+            }
     all_models: list[FittedR3Model] = []
     simulations: list[R3SimulationResult] = []
     candidate_rows: dict[str, dict[str, object]] = {}
@@ -339,12 +441,13 @@ def run_r3_development(
         for fold in dataset.ready_folds:
             train = dataset.split_keys[(fold, "train")]
             validation = dataset.split_keys[(fold, "validation")]
-            test = dataset.split_keys[(fold, "test")]
+            validation_scoring = dataset.scoring_keys[(fold, "validation")]
+            test_scoring = dataset.scoring_keys[(fold, "test")]
             validation_scores, fitted = _score_segment(
                 candidate,
                 dataset,
                 training_keys=train,
-                score_keys=validation,
+                score_keys=validation_scoring,
                 config=config,
             )
             candidate_models.extend(fitted)
@@ -353,6 +456,7 @@ def run_r3_development(
                 simulate_r3_account(
                     candidate_id=candidate.candidate_id,
                     scores_by_decision=validation_scores,
+                    eligible_by_decision=_eligible_by_date(validation_scoring),
                     market=market,
                     config=config,
                     development=development,
@@ -363,7 +467,7 @@ def run_r3_development(
                 candidate,
                 dataset,
                 training_keys=train | validation,
-                score_keys=test,
+                score_keys=test_scoring,
                 config=config,
             )
             candidate_models.extend(fitted)
@@ -376,6 +480,7 @@ def run_r3_development(
                 simulate_r3_account(
                     candidate_id=candidate.candidate_id,
                     scores_by_decision=test_scores_fold,
+                    eligible_by_decision=_eligible_by_date(test_scoring),
                     market=market,
                     config=config,
                     development=development,
@@ -391,6 +496,13 @@ def run_r3_development(
                 simulate_r3_account(
                     candidate_id=candidate.candidate_id,
                     scores_by_decision=combined_test_scores,
+                    eligible_by_decision=_eligible_by_date(
+                        frozenset(
+                            key
+                            for fold in dataset.ready_folds
+                            for key in dataset.scoring_keys[(fold, "test")]
+                        )
+                    ),
                     market=market,
                     config=config,
                     development=development,
@@ -400,6 +512,13 @@ def run_r3_development(
         continuous = simulate_r3_account(
             candidate_id=candidate.candidate_id,
             scores_by_decision=combined_test_scores,
+            eligible_by_decision=_eligible_by_date(
+                frozenset(
+                    key
+                    for fold in dataset.ready_folds
+                    for key in dataset.scoring_keys[(fold, "test")]
+                )
+            ),
             market=market,
             config=config,
             development=development,
@@ -506,6 +625,7 @@ def run_r3_development(
                 **row,
                 "dataset_sha256": dataset.dataset_sha256,
                 "split_sha256": dataset.split_sha256,
+                "scoring_sha256": dataset.scoring_sha256,
                 "status": "completed",
                 "recorded_at": run_timestamp.isoformat(),
                 "outcome_sha256": outcomes[candidate_id],
@@ -532,8 +652,15 @@ def run_r3_development(
         },
         "dataset_sha256": dataset.dataset_sha256,
         "split_sha256": dataset.split_sha256,
+        "scoring_sha256": dataset.scoring_sha256,
         "evidence_limitations": list(dataset.evidence_limitations),
         "protocol_ready_fold_ids": list(dataset.ready_folds),
+        "matched_evaluation_policy": {
+            "candidate_ids": [row.candidate_id for row in config.candidates],
+            "same_scoring_dates_and_eligibility_universes": True,
+            "same_portfolio_cost_and_risk_policy": True,
+            "segments": scoring_audit,
+        },
         "candidate_table": candidate_rows,
         "validation_selection": {"best_ridge": best_ridge, "best_tree": best_tree},
         "paired_uplift": comparisons,
@@ -554,13 +681,19 @@ def run_r3_development(
             "Overlapping monthly cohorts are descriptive, not independent probabilities.",
             "The explicit R3.2 scope decision permits development but does not cure evidence gaps.",
             "No paper/live execution, fresh holdout claim, or qualification is produced.",
+            (
+                "A corrected development result above 10% would not by itself "
+                "demonstrate the objective."
+            ),
         ],
     }
     return R3DevelopmentRun(report, register, tuple(all_models), tuple(simulations))
 
 
 def write_r3_development(result: R3DevelopmentRun, output: Path) -> dict[str, str]:
-    output.mkdir(parents=True, exist_ok=True)
+    if output.exists():
+        raise FileExistsError(f"refusing to overwrite immutable development output: {output}")
+    output.mkdir(parents=True)
     model_directory = output / "models"
     model_directory.mkdir(exist_ok=True)
     model_manifest: list[dict[str, object]] = []

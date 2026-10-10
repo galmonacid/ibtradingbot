@@ -1,0 +1,17 @@
+contract: r3-later-period-design-v1
+requested_start: '2010-01-01'
+calendar_complete_through: '2026-09-15'
+initial_train_years: 8
+validation_years: 2
+test_years: 1
+step_months: 12
+purge_sessions: 31
+calendar:
+  path: data/local/phase3_v2/calendar.csv
+  sha256: 942db7fb86a85cf0c7f50a220eee39fca3fde2d5d5ce2775cb133f43d7f3ce8e
+features:
+  path: data/local/r3_2_20261002_corrected_v2/features.parquet
+  sha256: 26de5d7251a6b4a756423983d129f2cc6cc476e00fbf9a61c3b3a03ece975ce5
+sample_coverage:
+  path: data/local/r3_step3_20261002_feasibility_v7/coverage.json
+  sha256: d7e52eb0b82a5a6902c649c72c13f9383519c3c2821c8edf654b29aeca055f7a
