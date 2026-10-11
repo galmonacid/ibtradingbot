@@ -1,6 +1,6 @@
 # Period-aligned fundamental feature audit
 
-Updated 2026-10-10. Stage: later-period source remediation and feature engineering, before the separately registered Ridge/XGBoost experiment. This extends [R3 completion progress](R3_COMPLETION_PROGRESS.md); R3 remains incomplete. These are issuer-level calculations and coverage evidence, not admitted security-level model inputs or return results.
+Updated 2026-10-11. Stage: four ratios now enter a separately versioned, sparse offline ablation with eight manually reviewed issuer/security joins; see [the current experiment](NEXT_RESEARCH_CYCLE.md#sparse-fundamental-ablation--2026-10-11). The historical coverage audit below predates that model run. The [completed ablation](NEXT_RESEARCH_CYCLE.md#completed-ablation-result--2026-10-11) found only 1.54% joined stock-month coverage and no established incremental value from ratio values. This extends [R3 completion progress](R3_COMPLETION_PROGRESS.md); R3 remains incomplete. These are issuer-level calculations and coverage evidence, not admitted security-level model inputs or return results.
 
 ## Implemented definitions
 
@@ -52,9 +52,9 @@ python -m src.cli.r3_fundamental_coverage \
 
 Run from the repository root with Python 3.12+ and the declared historical-data dependencies. Source pairs are ordered. Outputs must be new; the report includes working-tree provenance, so later implementation or documentation edits legitimately change its hash. No fitted model, canonical data or previous experiment was overwritten.
 
-## Remaining gate
+## Remaining qualification work
 
-Expand and verify historical issuer/class joins and repair absent trading histories before materializing model-ready enriched data. Then freeze the feature/missingness policy, cost assumptions, trial budget and ablations. Retain momentum and Ridge as controls and test XGBoost on the same eligible universe and portfolio policy. These coverage results do not justify selecting any model or weakening risk/qualification requirements.
+Expand and verify historical issuer/class joins and repair absent trading histories before qualification-grade enriched data. A separate conditional development ablation has already used the eight manually matched sample joins. Then freeze the feature/missingness policy, cost assumptions, trial budget and ablations. Retain momentum and Ridge as controls and test XGBoost on the same eligible universe and portfolio policy. These coverage results do not justify selecting any model or weakening risk/qualification requirements.
 
 ## Verification — 2026-10-10
 

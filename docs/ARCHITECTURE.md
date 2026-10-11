@@ -2,6 +2,13 @@
 
 2026-10-10: [Fundamental feature engineering](FUNDAMENTAL_FEATURE_AUDIT.md) adds four causal issuer-level ratio primitives and a coverage CLI. They are separate from the old R3 feature schema and have not entered a model or canonical dataset. Historical security joins and full-universe enriched readiness remain unverified.
 
+## Iterative research path
+
+The separate `r3_enriched` learner and `r3_fundamental_iteration` research/CLI route add four SEC ratios plus missingness indicators to the existing price-only diagnostic for eight manually reviewed sample joins. The fixed source and price-only report hashes are checked before fitting. This route does not alter the old engine or qualify an account.
+
+
+The separate `src.learning.r3_iteration`, `src.research.r3_iteration` and `src.cli.r3_iteration` modules implement the three-family ranking diagnostic in [NEXT_RESEARCH_CYCLE.md](NEXT_RESEARCH_CYCLE.md), configured by `config.r3-iteration.yaml`. The `iteration` extra adds XGBoost 3.1.3. Existing R3.3 learning/configuration and account simulation are unchanged. Diagnostic outputs cannot qualify an account.
+
 ## Existing implementation
 
 `src/data` provides source/canonical/PIT/FX tooling. `src/features`, `src/strategy` and `src/portfolio` retain V1/V2 calculations. `src/backtest/v2.py` and `v2_execution.py` retain legacy accounting. R3.1 supplies the separate economics feasibility audit; R3.2 supplies typed registration, causal materialization, purged folds and exact one-year accounting. R3.3 adds the bounded local-CPU learner and common development simulator. Next-cycle Step 3 adds `src/config/r3_step3.py`, `src/research/r3_source_feasibility.py` and `src/cli/r3_step3_feasibility.py` for bounded, immutable source auditing only. The post-stop `r3_post_step3` config/research/CLI path verifies evidence and emits remediation/governance records; it imports no learning, strategy, portfolio, simulation or backtest module. Neither gate produces a learner, score or Step 4 register. Generated source responses and reports are ignored development evidence. No broker/live package or qualification wrapper exists.
@@ -29,7 +36,7 @@ Do not start implementation by creating empty module trees. Establish the smalle
 
 ## Migration contract
 
-Existing configs, commands and their semantics remain V1/V2 controls. The separate `r3.1-feasibility-v1` config and entry point fix initial capital at £3,000 and audit the $20m capacity screen and cost-derived order floor without changing the legacy engine. R3.2's `r3.2-contract-v1` configuration and one-year evaluator are separate additions. R3.3 owns learned scores and matured-label training, but cannot start until the R3.2 evidence blockers are resolved. Existing validators and cost guards cannot enact these changes by editing prose or flipping `ml.enabled`.
+Existing configs, commands and their semantics remain V1/V2 controls. The separate `r3.1-feasibility-v1` config and entry point fix initial capital at £3,000 and audit the $20m capacity screen and cost-derived order floor without changing the legacy engine. R3.2's `r3.2-contract-v1` configuration and one-year evaluator are separate additions. R3.3 owns learned scores and matured-label training, under its preserved experiment contract. New bounded diagnostics follow the separate current iteration policy. Existing validators and cost guards cannot enact these changes by editing prose or flipping `ml.enabled`.
 
 Preserve legacy tests. Reuse pure primitives after checking their assumptions; do not mutate the old engine to make the new comparison easier. Add R3 acceptance and objective gates before any path can claim R3 readiness. The legacy paper-readiness field must never authorize R3 by itself.
 

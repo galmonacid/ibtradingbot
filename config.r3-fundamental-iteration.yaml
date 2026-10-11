@@ -1,0 +1,36 @@
+contract: r3-fundamental-iteration-v1
+price_config: config.r3-iteration.yaml
+price_dataset: data/local/r3_2_20261002_corrected_v2
+baseline_run: data/local/r3_iteration_20261010_v1
+baseline_manifest_sha256: 8a9bd207da31572dcbabafd77a57cd713564f00171442690c1da0e1e8bf7c892
+fundamental_report: data/local/r3_fundamental_20261010_audit_v2/report.json
+fundamental_report_sha256: 9f777c644185e772deb596b9a4693c9f0c612ccdc8b9f504e7e9eb2ebbd98528
+join_audit: data/local/r3_step3_20261002_feasibility_v7/issuer_security_join_audit.json
+join_audit_sha256: 886fc9c1cbf96b92fb583df53332d3351c284194743d8381ccc912a36bf30a25
+# Only single-security, manually reviewed sample joins; all other securities stay missing.
+joined_security_ids:
+  - IC-US-15ea23217745b13c
+  - IC-US-adca1c049832ae84
+  - IC-US-5ba4663da77d616c
+  - IC-US-7e91b0cf8a2e0136
+  - IC-US-305db138a2cc6132
+  - IC-US-7739304b4a1b9642
+  - IC-US-8a03390100c6812f
+  - IC-US-e0fc08bd126c231e
+feature_names:
+  - liabilities_assets
+  - annual_net_income_assets
+  - annual_operating_cash_flow_assets
+  - annual_gross_profit_assets
+missing_policy: zero_plus_indicator
+seed: 20261010
+ridge_alpha: 10.0
+xgboost:
+  n_estimators: 100
+  max_depth: 3
+  learning_rate: 0.05
+  min_child_weight: 100.0
+  reg_lambda: 10.0
+  reg_alpha: 0.0
+  subsample: 1.0
+  colsample_bytree: 1.0

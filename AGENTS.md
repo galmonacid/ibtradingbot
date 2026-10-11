@@ -4,9 +4,11 @@
 
 Develop a research-first, long-only equity system intended for an IBKR UK Stocks & Shares ISA. The user-confirmed objective is **more than 10% total GBP return within one year after trading and recurring operating costs**, starting with £3,000. This is not a guarantee, a multi-year CAGR substitute or financial advice. Valid evidence and account safety take precedence over a favorable backtest.
 
-Current roadmap: R3 research reset. V1/V2 are rejected controls. The user has authorized considering ML immediately; R3 permits offline ML research after the economics/data prerequisites, without waiting for deterministic profitability or live trading. No new model or broker implementation exists merely because the Markdown changed.
+Current roadmap: R3 research reset. V1/V2 are rejected controls. The user has authorized considering ML immediately; R3 permits bounded offline momentum/Ridge/XGBoost comparisons with explicit data limitations, without waiting for complete historical remediation, deterministic profitability or live trading. No new model or broker implementation exists merely because the Markdown changed.
 
 ## Working agreement
+
+- User decision 2026-10-10: prioritize bounded offline iterations over complete historical-data remediation, following the current policy in docs/ROADMAP.md. Accept conditional comparisons with explicit sensitivity analysis; do not require full-universe completeness or renewed offline authorization for every experiment. Preserve causal validity, disclose unbounded biases and keep qualification/live gates separate.
 
 - Before edits, inspect Git status, relevant code/configuration and the applicable specification. State the intended outcome and roadmap stage.
 - Follow docs/ROADMAP.md in small, reviewable changes. Do not add live execution, leverage, shorting, derivatives, new asset classes or infrastructure ahead of their stage.

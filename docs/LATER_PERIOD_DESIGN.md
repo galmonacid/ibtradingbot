@@ -1,6 +1,6 @@
 # Later-period research design
 
-Registered direction: 2026-10-07, following the user's explicit approval. Stage: source remediation and period design, before Step 4 model-trial registration. This supplements [NEXT_RESEARCH_CYCLE.md](NEXT_RESEARCH_CYCLE.md) and [SOURCE_REMEDIATION.md](SOURCE_REMEDIATION.md).
+Registered direction: 2026-10-07, following the user's explicit approval. Historical stage at registration: source remediation and period design. These dates now also support the completed separate diagnostic in [the current cycle](NEXT_RESEARCH_CYCLE.md). This supplements [NEXT_RESEARCH_CYCLE.md](NEXT_RESEARCH_CYCLE.md) and [SOURCE_REMEDIATION.md](SOURCE_REMEDIATION.md).
 
 ## Period and rationale
 
@@ -38,7 +38,9 @@ python -m src.cli.r3_later_period \
 
 Use Python 3.12+ with the project's historical-data dependencies. Run from the repository root. Outputs must be new; local artifacts remain ignored. This command registers calendar/coverage evidence only and is not a dataset builder or backtest command.
 
-## Next implementation gates
+## Historical remediation checklist (not a block on current diagnostics)
+
+The [current cycle](NEXT_RESEARCH_CYCLE.md) reuses these dates for conditional price-feature diagnostics. The following list describes remaining enriched-data/qualification work, not prerequisites to every model fit.
 
 1. Repair source histories for the identified FB/META and Berkshire aliases, retaining failed requests and independent class evidence. Reconcile prices and corporate actions before building a new canonical artifact. Measure historical membership coverage, including departures and unavailable securities.
 2. Expand causal SEC availability coverage to the full historical universe and every registered monthly decision, including later years. Resolve historical revenue concepts and issuer/class joins; define stale, missing and industry-specific feature rules before inspecting predictive returns. Do not restrict the universe to the eleven sampled issuers or complete cases.

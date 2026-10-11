@@ -1,5 +1,7 @@
 # Data, features and labels
 
+**Current policy, 2026-10-10:** the user authorizes faster bounded offline experiments with imperfect data and explicit sensitivity analysis. The [current iteration policy](ROADMAP.md#current-iteration-policy--2026-10-10) supersedes earlier blanket requirements here to complete all historical remediation or obtain renewed permission before development comparisons. Earlier records remain historical evidence. Qualification gates remain unchanged. The separately implemented diagnostic and its current status are documented in [NEXT_RESEARCH_CYCLE.md](NEXT_RESEARCH_CYCLE.md).
+
 2026-10-10: [Fundamental feature engineering](FUNDAMENTAL_FEATURE_AUDIT.md) adds four causal issuer-level ratio primitives and a coverage CLI. They are separate from the old R3 feature schema and have not entered a model or canonical dataset. Historical security joins and full-universe enriched readiness remain unverified.
 
 2026-10-04 source update: [SOURCE_REMEDIATION.md](SOURCE_REMEDIATION.md) records the bounded SEC cover audit and candidate historical SIC route. These observations do not yet create historical identity intervals, replace sector definitions, or enter model features. Existing evidence gaps and source-admission rules remain.

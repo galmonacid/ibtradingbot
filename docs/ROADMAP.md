@@ -1,343 +1,36 @@
-# Execution plan
+# R3 execution plan
 
-Decision date: 2026-09-26. Updated 2026-10-10. Current stage: **R3 blocked on historical-data acquisition and dated identity evidence; Step 4 remains unregistered and not ready**. R3.1 and R3.2 were closed by explicit scope decisions while their evidence gaps remained open. R3.3 and its corrected control rerun failed development. Prior engineering is retained; V1/V2 investment candidates remain rejected. The objective is >10% all-in GBP return within the first year on initial £3,000: net profit >£300 and terminal wealth >£3,300.
+Updated 2026-10-10. Stage: **bounded offline experiments with explicit data uncertainty**. Target: >10% all-in GBP return within one year on £3,000, without additional funding. No candidate is qualified; no broker integration is authorized.
 
-The user has requested completion of the remaining R3 work. The [current completion record](R3_COMPLETION_PROGRESS.md) documents the full 793-identity universe audit, public-source discovery, pending acquisition needs and the unaltered forward-evidence gates. Offline continuation is authorized; R3 is not complete and no new model has been fitted.
+## Current iteration policy — 2026-10-10
 
-## Fundamental source/feature work — 2026-10-10
+The user authorizes faster offline iteration using imperfect historical data where the limits still permit useful evaluation. Complete historical remediation is not a prerequisite to every experiment. Do not ask again for bounded offline continuation. Qualification and paper/live requirements remain separate in [validation](BACKTEST_AND_VALIDATION.md) and [risk](RISK_AND_EXECUTION.md).
 
-The [fundamental feature audit](FUNDAMENTAL_FEATURE_AUDIT.md) records four implemented issuer-level ratios, 25 new public SEC responses, monthly coverage across 19 issuers and one original-filing reconciliation. Tests and real-data reproduction pass. Full-universe historical joins and missing trading histories remain unresolved; this is engineering progress before the Step 4 model registration, not a trained strategy or qualification result.
+Each cycle fixes a question, small candidate budget, inputs, chronological splits and sensitivity cases before fitting; then produces a result and a decision. Repair data when it changes that decision, rather than expanding infrastructure or auditing unrelated source gaps. Preserve failures and immutable evidence.
 
-## Later-period design — 2026-10-07
+- Compare **momentum, Ridge and XGBoost together**. Ridge is a linear control, not a gate before XGBoost.
+- Keep scoring independent of future outcomes; preserve actual label maturation, overlap purging and training-only transforms. No guessed identities, fabricated prices or future information.
+- Supported subsets answer conditional questions. Report the historical denominator, exclusions and missing outcomes; never select today's survivors or claim subset coverage represents the full universe.
+- Optional features may be deferred or use registered causal missingness rules. No fabrication of entire pre-coverage eras.
+- Show paired comparisons and sensitivity to missing outcomes/costs. Scenario ranges are not confidence intervals; unsupported bounds must be described as illustrative. If a conclusion changes under credible adverse assumptions, call it inconclusive and identify the responsible defect.
+- Preserve £3,000 accounting and every portfolio/risk invariant for account simulations. Ranking diagnostics do not establish net returns or the >10% objective.
 
-The user approved this direction. The [separate period design](LATER_PERIOD_DESIGN.md) and `config.r3-later-period.yaml` register a 2010 calendar start, preserving initial 8/2/1 durations, annual steps and 31-session purge requirements. The implemented offline planner verifies exchange sessions and reports six complete calendar folds and existing price-feature coverage. Full-universe fundamentals, identity/history repair and cost/permission gates remain open; no model is fitted or qualified. Continue source remediation against this registered period before the Step 4 candidate budget is frozen.
+## Current cycle
 
-## Public-source remediation — 2026-10-04
+The first cycle completed on 2026-10-10: weak ranking diagnostics, unresolved paired outcomes and no model promotion. See [results and next hypothesis](NEXT_RESEARCH_CYCLE.md#result--2026-10-10). The sparse fundamental cycle has completed. Its eight reviewed joins cover only 1.54% of scored rows, and the models heavily favor the covered identities. See [the result](NEXT_RESEARCH_CYCLE.md#completed-ablation-result--2026-10-11). No model is promoted. A registered coverage-only control would test whether actual ratio values add anything beyond source membership; broader joins are required before representative performance claims.
 
-The user's request to continue authorizes the bounded public-source audit described in [SOURCE_REMEDIATION.md](SOURCE_REMEDIATION.md). A tested offline extractor and immutable three-filing audit retain 17 complete cover observations and 22 incomplete contexts. Primary Meta transition evidence and distinct Berkshire/Alphabet share classes are documented without mutating the local security master. SEC accession-level SIC is a candidate industry source requiring original-header and publication/vintage checks; no feature substitution was made.
+The exact experiment is in [NEXT_RESEARCH_CYCLE.md](NEXT_RESEARCH_CYCLE.md) and [config.r3-iteration.yaml](../config.r3-iteration.yaml). It reuses the corrected local price-feature dataset over the six approved later-period folds, with one configuration per family. It first tests estimator effects through monthly ranking diagnostics, not a funded portfolio. Fundamentals are the next information hypothesis; their incomplete coverage does not block the first comparison.
 
-Package identity is `47409e643d6766e2f6ec156c4bf995a08bdbf72646fb97da033e550fd3d4c0c7`. Old evidence verifies unchanged. The source record contains actual tests/checks and the next research-design choice. Earlier authorization statements below describe the 2026-10-03 checkpoint; bounded remediation no longer needs another approval. Fundamental history, full identity/action coverage and recurring-cost evidence still prevent Step 4 readiness.
+1. Register inputs, parameters, weights, dates and sensitivity cases before fitting.
+2. Execute momentum/Ridge/XGBoost on identical scoring rows, retaining unresolved selections.
+3. Report conditional rank correlation, selected-label coverage and paired diagnostics; separate validation from test and preserve each annual block.
+4. Use validation and data sensitivity to define the next hypothesis. Do not tune on outer-test results. Add causal fundamental features or repair the specific outcome gap only when that is the next useful question.
+5. Run a shared-policy, after-cost £3,000 account comparison when inputs support it. Report unresolved accounts; never turn an unavailable valuation into a fill.
 
-The follow-up lineage audit (`fd11ec7676e61c4dace40559cc1e2de8212a3fb31432cd7f48c9fd35ffd41106`) confirms the shadow Meta/BRK.B IDs have no retained bars or membership; failed FB/BRK.B provider requests explain missing histories. GOOG/GOOGL remain distinct across 3,136 overlapping sessions. Acquisition/coverage repair is required; an ID merge cannot recover absent prices. No canonical artifact was modified.
+## Completed foundations and historical evidence
 
-## Post-Step-3 remediation and protocol-decision gate
+R3.1 economics and R3.2 data/split tooling exist. R3.3's original outcome-dependent scoring was corrected; the corrected momentum/Ridge/HGB controls failed promotion. Source audits, later-period planning, fundamental primitives and adjustment checks exist. They do not certify full coverage or establish profitability.
 
-Package `data/local/r3_post_step3_20261003_decision_v1` is immutable, ignored and content-bound at identity `45ca6a6c89ecd5fd0640d58aa5e91aaec03ac5a2b6ca65d41f5c0dc224cbf394`; its artifact-manifest SHA-256 is `7c6acf6b69edc84cf27204d7e12d5b20cb94af140bae9a06290d664d6038cf1e`. It verified the Step 3 package, corrected dataset/scoring/report and both original and corrected 541-model manifests without rewriting them. A fixed-input reproduction matched byte-for-byte.
+Detailed source work remains in [R3_COMPLETION_PROGRESS.md](R3_COMPLETION_PROGRESS.md), [SOURCE_REMEDIATION.md](SOURCE_REMEDIATION.md), [FUNDAMENTAL_FEATURE_AUDIT.md](FUNDAMENTAL_FEATURE_AUDIT.md) and [LATER_PERIOD_DESIGN.md](LATER_PERIOD_DESIGN.md). These are evidence records, not additional sequential approval gates. [Data repair requirements](DATA_REPAIR_REQUIREMENTS.md) guide targeted repairs and eventual qualification. [Legacy evidence](LEGACY_EVIDENCE.md) covers rejected controls and reproduction.
 
-The decision register contains exactly three options. Option A stops enriched-feature work and needs no further authority. Option B remediates identity, sector and macro evidence while retaining the existing protocol; it needs explicit new authority and **cannot** solve the SEC pre-2009 history gap. Option C may only propose a separate protocol-amendment decision package after complete evidence remediation and an explicit user decision; no amendment has been executed. Options are governance paths, not return- or investment-ranked candidates.
-
-Blocker dispositions are: SEC coverage unresolved at 0/9 folds; local issuer/security identity not repairable from current evidence; dated sector data rejected pending a separately authorized bounded source audit; ALFRED blocked by an unsupplied registered key with no official no-account bulk route established from frozen documentation; and all non-observed recurring costs retained as unknown. Training-only imputation cannot turn an all-missing pre-coverage era into enriched history. Present-day identity or sector metadata cannot be substituted historically.
-
-No protocol, label, fold, portfolio, risk, source-contract or candidate-budget change occurred. No Step 4 experiment register, fit, score, simulation, backtest, performance comparison, candidate selection, fresh holdout access, broker connection or account change occurred. Step 4 remains unauthorized. The only action available without further authority is Option A/no further enriched-feature work; Options B and C require an explicit future user decision.
-
-Verification: 11/11 focused tests passed; deterministic materialization and its 12-file byte-for-byte reproduction passed; Ruff, strict mypy on the new files, isolated package build, documentation links, diff whitespace, ignore, integrity and secret checks passed. The broader suite recorded 433 passes, five failures and one skip because the active runtime lacks optional sklearn and exchange-calendar dependencies. Full `mypy src` recorded eight existing sklearn import/unused-ignore diagnostics for the same environment reason. These checks neither fitted a model nor changed research evidence; no missing optional dependency was installed merely to obtain a green result.
-
-## Next-cycle Step 3 — source feasibility and preregistration
-
-The separately versioned `r3-step3-source-feasibility-v1` audit is complete. A deterministic 11-issuer SEC sample and 46 public source responses were hash-bound. It retained actual acceptance timestamps plus 24-hour processing latency, later-only amendments/restatements, distinct quarterly/YTD/annual facts, explicit missing/conflicting facts and sample identity failures. The 15,855 retained facts begin causally on 2009-07-23. Because the existing nine folds require complete enriched training history from 1999-01-29, the audit supports 0/9 full folds without backfill.
-
-Causal sector metadata was unavailable; ALFRED vintage observations were not accessed because the official API requires an unsupplied credential; and required sector/macro recurring costs remain unknown. The audit therefore created `r3-step3-failure-register-v1` rather than a Step 4 experiment registration. The next actionable decision is whether to stop this research direction or separately authorize remediation/new protocol design. Do not shorten folds, backfill fundamentals, reinterpret inspected dates as fresh, or start model evaluation from this record.
-
-## R3.1 — Prove account economics and explain the missed exposure
-
-First implementation change: add an offline feasibility/attribution report using the existing evidence and raw ledger primitives. It must enumerate the funnel from PIT membership through data, liquidity, signal, regime, volatility allocation, whole-share rounding, economic floor, cash and actual fills. Attribute skipped orders and exposure by date; separate fee erosion from signal returns and halted time.
-
-Compare the old $500m/£150 policy with the proposed capacity/cost policy without choosing parameters from future returns. Produce a £3,000 starting-account budget including tariff offsets, FX, fees, recurring data/hosting and mandatory-liquidation reserves. Resolve exact broker tariff/permissions using documented account evidence when provided; otherwise label alternatives and block qualification. No account connection or purchase is needed for the initial offline report.
-
-**Exit:** reconciled cost/exposure attribution, executable plans for the £3,000 starting account, known all-in cost budget and no hidden funding or fractional assumption. Zero feasible trades, unaffordable data or an unresolved cost contract means stop or seek a separate scope decision. It does not authorize lowering safety limits.
-
-### R3.1 implementation record — 2026-09-27
-
-Implemented separately from V1/V2:
-
-- strict `r3.1-feasibility-v1` configuration and offline CLI;
-- immutable £3,000 V2 ledger validation and same-fill gross/cost reconciliation;
-- per-session exposure/halt attribution plus decision-date exclusions, skips and fills;
-- causal PIT/calendar recomputation of the fixed $500m/£150 funnel versus the predeclared $20m, 0.01%-capacity and <=1% round-trip-cost policy;
-- flat-£3,000, next-session-open, whole-share feasibility plans with the 2% cash buffer, 12% volatility ceiling, <=30% name cap and mandatory-liquidation reserve; and
-- a fail-closed budget that distinguishes a possible commission offset from the conservative full £36 annual account minimum and never double counts the alternatives.
-
-The content-bound run used the preserved `gbp3000__baseline.json` ledger and matching V3 canonical/calendar evidence. It reconciled 1,254 sessions, 49 fills, 4.1860% mean exposure and 85 hard-halted sessions from 2026-02-27. Terminal wealth was £2,576.95 (net profit -£423.05). Same-fill gross profit was -£189.59; modeled cost drag was £233.46 and nominal recorded costs were £233.88. Thus costs materially worsened the result but did not explain away the negative same-fill outcome.
-
-Across 55 historical decision dates, the R3 policy audit found 57 individually feasible orders but only 2 complete four-order flat-account plans (8 orders). Capacity was not the observed binding constraint. Whole-share rounding and the fixed 1% complete round-trip cost ceiling blocked most plans. These are inspected development feasibility observations, not an R3 return simulation or parameter-selection evidence.
-
-The conservative budget includes the full £36 annual account minimum plus a £5.03 maximum observed liquidation reserve, requiring gross profit strictly above £341.03 under the current assumptions. It assumes no additional funding and no fractional shares. Exact tariff/commission-offset terms, account/instrument permissions, and incremental annual data, hosting and software costs require evidence. The retained ledger also carries known development-data limitations. Therefore the all-in budget is not known and R3.1 research acceptance is **blocked**. The separate scope decision below closes the phase without changing that evidence result.
-
-### R3.1 assumption-only closure attempt — 2026-09-27
-
-At the user's direction, the configuration now records these planning assumptions:
-
-- charge the full £3 adult-ISA monthly minimum with no commission offset, for £36 per year;
-- permit whole-share eligible US stocks in the intended cash-only ISA;
-- do not assume fractional-share permission; and
-- use £0 incremental annual data, hosting and software cost, with existing resources treated as sunk.
-
-The public [IBKR UK ISA overview](https://www.interactivebrokers.co.uk/en/accounts/isa-accounts.php) states that the adult ISA is cash-only, has a £3 monthly minimum activity fee, offers global-market access, and prices US stocks from USD 0.005 per share. The public [required-minimums schedule](https://www.interactivebrokers.co.uk/en/accounts/required-minimums.php) separately lists the £3 monthly minimum. Those pages do not establish the intended account's exact commission-offset calculation, security-by-security ISA eligibility, enabled trading permissions, or actual incremental operating costs. The config therefore separates the assumed values from three `false` verification flags; assumptions cannot satisfy the evidence gate.
-
-The rerun retained 2 complete feasible flat-account plans and the same £41.03 fixed-cost/liquidation-reserve budget. Research acceptance remains `false`. The unresolved evidence is: exact tariff and commission offset; account permissions and instrument eligibility; support for the assumed £0 incremental data/hosting/software cost; and the previously recorded legacy-data limitations. No purchase, account connection or order occurred.
-
-### R3.1 closure decision — 2026-09-27
-
-The user explicitly decided to move to R3.2 despite all four open points above. This is the separate scope decision allowed by the R3.1 exit contract. The report records `phase_closed: true`, `next_stage_permitted: true` and `next_stage_started: false`, with closure basis `explicit_scope_decision_with_open_evidence`.
-
-This decision does not make the all-in budget known, satisfy research acceptance, cure legacy data limitations, qualify a candidate, authorize paper/live execution, or permit the open points to be omitted from later readiness checks. They carry forward as explicit unresolved dependencies. No R3.2 implementation was performed while recording this decision.
-
-Reproduction (outputs remain ignored):
-
-```bash
-python -m src.cli.r3_feasibility \
-  --ledger data/local/phase3_v2/audited_full_final_v2/ledgers/gbp3000__baseline.json \
-  --legacy-report data/local/phase3_v2/audited_full_final_v2/research_report.json \
-  --config config.r3-feasibility.yaml \
-  --canonical-manifest data/local/phase3_build_v3/canonical/canonical_manifest.json \
-  --calendar data/local/phase3_v2/calendar.csv \
-  --output-directory reports/r3_1_20260927 \
-  --run-timestamp 2026-09-27T13:00:00+00:00
-```
-
-Evidence identities include the physical ledger `58050022095740a032031d11fae140939bc30469d0be8eb75afcc84c4d9d95fd`; its audited parent report `eff58a1d823f5814cb546f3898eddf625ff7000c079c013213db8bc6f13b6db1`; canonical manifest `a669110a7f575f8c3883dbcf7f9ab9203a21031f8f27d0789405ba80692d5dc3`; calendar `942db7fb86a85cf0c7f50a220eee39fca3fde2d5d5ce2775cb133f43d7f3ce8e`; and closure-config file `61dfb04a1c505c22797105b65155d10ea93135fe77fca7e2c08da3db16d41eea`. The ignored JSON artifact SHA-256 is `16127a4d758abec6f7e1dcd3bbe5c85dd26abf436463aeb81f361330ac9a60b3`; its internal report identity is `3056132a8ad3de1423104b317aa68fac277bc13baef43ac6102ec8dbd56189e8`. The report records implementation-tree SHA-256 `6e1cacd50b79b7c89ea6fa1eb1bc3e34bf022a21a951426e06bd535d25b54191`, the dirty working-tree status, Python/dependency versions and timestamp.
-
-This R3.1-era next-task statement is superseded by the R3.2 implementation and materialization records below. Its unresolved dependencies remain carried forward.
-
-## R3.2 — Data contract, objective evaluator and bounded registration
-
-Close the data gaps listed in DATA_AND_FEATURES; preserve existing source licences and manifests. Implement exact 12-month endpoint/all-in wealth accounting before model optimization. Add causal stock-month features, matured labels, date-grouped/purged splits and a complete accessed-data/trial register. Fix the six candidate configurations and portfolio sensitivity list. Add a separate typed R3 configuration and fail-closed readiness result.
-
-**Exit:** tests for future-data mutation invariance, split/action/FX timing, delisting outcomes, fee attribution, one-year endpoints and £3,000 account readiness. If data supports only development, record that clearly; no qualification claim. Training cannot proceed on invalid label construction.
-
-### R3.2 implementation record — 2026-09-27
-
-Implemented separately from the rejected V1/V2 controls:
-
-- strict `r3.2-contract-v1` configuration containing exactly the momentum control, Ridge alphas 1/10/100, histogram-gradient-boosting leaf counts 7/15, fixed seed and eight portfolio sensitivity neighbors;
-- causal monthly stock-row primitives with stable identities, availability timestamps, fixed feature schema, explicit exclusion reasons and complete 253-session inputs;
-- GBP open-to-open excess labels with causal FX lookup, payment-timed after-withholding cash actions, split handling, explicit delisting recovery and unresolved-outcome blocking;
-- annual-step 8-year/2-year/1-year chronological folds using matured labels, same-date assignments, actual interval purging and a 31-exchange-session boundary gap;
-- exact last-session-on-or-before-12-calendar-month GBP accounting with a gross/trading-net/all-in cost bridge, liquidation reserve, external-flow rejection, unsettled/accrual disclosure and strict `>£300`, `>£3,300`, `>10%` gates; and
-- a content-bound accessed-data/trial register that preserves rejected V1/V2 controls, pre-registers all six R3 configurations, and produces a separate readiness result carrying the R3.1 and data-evidence blockers forward.
-
-No model was trained and no R3 return simulation was run. Synthetic tests establish interface and timing behavior only. The preserved R3.1 ledger, parent report, canonical manifest and calendar were rechecked at their recorded hashes. The available historical inputs still have the documented gaps in dated primary/common-stock evidence, dividend payment/withholding evidence, independent calendar evidence, FX vintages and delisting recovery completeness. Tariff, account permission and incremental operating-cost evidence also remain unverified. Therefore readiness is `development_only`, R3.2 research acceptance is **blocked**, and R3.3 training is not yet permitted.
-
-Deterministic registration inspection:
-
-```bash
-python -m src.cli.r3_contract \
-  --config config.r3.yaml \
-  --run-timestamp 2026-09-27T15:00:00+00:00
-```
-
-After adding the explicit six-day retrospective FX-age assumption, the typed-config SHA-256 is `28b370314981a9e20a242c80971220037a5b92ae1be58258abac78a3de57dbdd`; the empty-access register identity containing the two rejected legacy controls and six R3 pre-registrations is `b6cc21f8e9a88f23f2fdedb1d27e1fa067e468a711f713a3619a77465ea988ed`. Generated datasets, fitted models and reports remain ignored.
-
-### R3.2 development materialization record — 2026-09-27
-
-The user decided that absent or unclear data licensing does not block local development research. The materializer still records source provenance, access terms and no-redistribution limitations; licensing remains a qualification/redistribution limitation rather than a reason to fabricate or omit data.
-
-`python -m src.cli.r3_dataset` now verifies the full canonical manifest and inputs, adapts half-open stable-ID membership and raw/adjusted bars, records all ten accessed files, materializes deterministic Parquet feature/label/split tables, retains unresolved outcomes, and writes a content-bound report and experiment register. No model code or model dependency was added.
-
-The fixed-timestamp run produced:
-
-- 30,627 feature rows over 2021-06-30–2026-09-15: 30,133 usable and 494 excluded;
-- 14,481 matured labels and 15,652 unresolved labels;
-- 33,422 split assignments across five partially populated folds;
-- two folds with some rows in all partitions, but zero protocol-ready folds because matured labels span only 1,765 days rather than the registered 11-year 8/2/1 protocol; and
-- an explicit `r3_3_development_training_permitted: false` result.
-
-The largest unresolved class is 13,744 labels affected by cash actions without payment dates. Other unresolved rows are 481 entry-FX gaps, 410 exit-FX gaps, 966 incomplete final horizons, 49 missing exits/recoveries and 2 missing entries. The retained canonical slice contains 9,923 dividends without payment/withholding fields and 35 delistings without payment dates. Classification for 606 retained membership intervals is assumed, not evidenced. The SPY-derived calendar matches benchmark sessions but is not independent; ECB FX is retrospective and not vintage-certified.
-
-Reproduction (outputs remain ignored):
-
-```bash
-python -m src.cli.r3_dataset \
-  --canonical-manifest data/local/phase3_build_v3/canonical/canonical_manifest.json \
-  --dataset-evidence data/local/phase3_build_v3/dataset_evidence.json \
-  --universe-policy data/local/phase3_build_v3/universe_policy.json \
-  --calendar data/local/phase3_v2/calendar.csv \
-  --fx-csv data/local/phase3_v2/fx.csv \
-  --fx-manifest data/local/phase3_v2/fx_manifest.json \
-  --config config.r3.yaml \
-  --output-directory data/local/r3_2_20260927 \
-  --run-timestamp 2026-09-27T16:00:00+00:00
-```
-
-Artifact identities are: feature table `9834cf5ac50460ed7babacdb7e49eb9932d437c1ddd8edf444c86cd802680d2d`; label table `304bf3cfbc3622a8d4b1f1436cf4f989f4c4b87b49b6222f3bc3a3104d2d372b`; split table `523343c2da171b56468e494cf71a154c4021ccd1badd3c33290b37ee5c739b4a`; accessed-data/trial register file `6ff81d0e30b32414935df0865ddaa8a9a305612203e82276f468e835ea4d3da4` with internal identity `9a2b9decd9c67e52c087829426bddc1a19a253b3e2b4cc186d96d3ad1fcbbc70`; dataset identity `92a48eaa3ecde8af70c160a9ac668fc40fba01e867d628ffec3e1b873d1ba9e4`; and report file `272fb608cff38fa6d991922677868965e3a3ca7e3a06899f36c67152005f6764`. A second fixed-timestamp run reproduced every artifact byte-for-byte. The report binds implementation tree `5a3ef881c268ed041527bf7a77f37f49d4e335a7d044c6fa0e943864a65b77b8`.
-
-Next actionable task: remain within R3.2 and obtain or construct source-backed dividend payment/withholding fields, explicit delisting payment/recovery timing, longer causal GBP/USD history, dated primary/common-stock classification and independent calendar evidence. Re-materialize and require at least one fully covered 8/2/1 fold with no outcome-conditioned cash-action omissions before permitting R3.3 development training. Tariff, account-permission and operating-cost gaps continue to block qualification but do not affect label construction.
-
-### R3.2 label-evidence closure record — 2026-09-28
-
-This change remained inside R3.2. It added a separate evidence builder and extended the materializer; it did not add a learner, fit a model, simulate a strategy, connect to a broker or place an order. V1/V2 code and evidence remain controls.
-
-Evidence added and limitations retained:
-
-- The existing ECB archive was rebuilt in full: 7,098 GBP/USD observations from 1999-01-04 through 2026-09-22. The CSV SHA-256 is `6924938e8071341ffd09f549832409db9e60d5d5181d00b0ffe615407c036361`; manifest `8fef782ec533d00f04866acc349437b4b9300c7db69bf3b5b9dd5047bc0625e3`; source archive `c63a1996014663ba3188c7b2820646882b07276513c0b3851a69581add38cb77`. The 14:10 Europe/Berlin observation and following-day 00:00 UTC availability assumptions are preserved. Vintage certification remains false.
-- Nasdaq dividend responses were stored immutably and matched on canonical ex-date and amount. State Street's official SPDR workbook supplied SPY payable dates back to 1993; its SHA-256 is `51a16a450298a663b3fa088883a17c75f4464e87c911b0e83902a0ad46877c54`. Matching never substitutes an ex-date for a payment date. Nasdaq terms are unresolved and State Street restricts reproduction, so raw/provider data is local-only and must not be redistributed.
-- The cash-action CSV contains 4,376 rows including 4,374 dividends and two delistings; only 4,367 dividend actions intersect the retained materialization slice. Its SHA-256 is `653d1beb9134839a08bc728e7b7bc1a88765da3870cf90d33fb25eee7a20f850`; manifest `027844c788419da1421962622cb1808512f39fcb460f3ffdeacb83c873b92693`; unmatched audit `413e926e4e7e057896dd276ff55a899db81050a27e1de81b58b3b49a37cf82c8`. The 15% treaty rate remains a W-8BEN/US-source development assumption, not verified account withholding.
-- TIF has explicit $131.50 cash and 2021-01-07 completion/payment timing from LVMH; SGEN has explicit $229 and 2023-12-14 completion timing from Pfizer. The curated file SHA-256 is `356015707b490ab93c50838d391e065ff4d221b54d3dbf24b54800b9d0fee9e7`. ABMD's contingent-value right and 107 other unavailable outcomes remain unresolved; no last price or zero recovery was invented.
-- `exchange_calendars` 4.13.2 supplied an independent Apache-2.0 XNYS ruleset. Its 7,726 generated sessions exactly match the benchmark calendar. Calendar SHA-256 is `e36f6f56f9f06f02db12170bf50afb549ffa0ea5ed182fc794eb5ff022b69a20`; manifest `06cfc751a2f3ac8218397777cd17ab4c24c9b822b81f635aa177832e7a0130ed`; package-tree identity `1d631ebb71723a591228b3cca488428ba536c296236a778664d19136340f174e`.
-- No dated primary/common-stock source was available. The versioned assumption covers 822 intervals, and its quantified impact is all 133,141 feature rows and all 121,291 attempted labels. Removing it leaves no materialized dataset. The assumption is therefore explicit and remains a qualification limitation.
-
-The experiment register records 17 accesses, including every new evidence CSV, manifest, source archive, curated file and State Street workbook, plus all six preregistered trials. Newly accessed sources are marked previously uninspected. Source hashes, access periods, retrieval time, terms and no-redistribution status are bound into the ignored artifacts.
-
-Compared with the 2026-09-27 artifact, feature rows increased from 30,627 to 133,141, usable rows from 30,133 to 121,291 and exclusions from 494 to 11,850 because the causal history is much longer. Attempted labels increased from 30,133 to 121,291; matured labels from 14,481 to 91,546; unresolved labels from 15,652 to 29,745. The absolute unresolved count rose with the fourfold broader history, while its share fell from 51.9% to 24.5%. Cash-action payment-date gaps changed from 13,743 to 28,605; old entry/exit FX gaps of 481/410 were reduced to zero, apart from one cash-action FX gap. Final-horizon gaps remain 966, missing exits/recoveries rose from 50 to 160 over the wider period, and missing entries rose from two to 13.
-
-The new artifact has 17 nonempty folds and nine fully covered registered 8/2/1 folds (IDs 0–8), versus two nonempty and zero ready folds before. It retains 28,606 unresolved cash-action labels and drops zero cash-action rows from the label artifact based on outcome. Retention makes the missingness visible but does not make those labels trainable. The two required readiness conditions are therefore evaluated separately: temporal coverage passes; complete, non-outcome-conditioned cash-action training coverage fails. **R3.3 development-training permission remains false.** Qualification also remains false.
-
-Reproduction (all outputs remain ignored and local-only):
-
-```bash
-python -m src.cli.r3_evidence ecb-fx \
-  --archive data/local/phase3_v2/fx_ecb_archive.zip \
-  --output-csv data/local/r3_2_evidence_20260928/gbp_usd_ecb.csv \
-  --output-manifest data/local/r3_2_evidence_20260928/gbp_usd_ecb_manifest.json \
-  --retrieved-at 2026-09-28T09:00:00+00:00
-
-python -m src.cli.r3_evidence xnys-calendar \
-  --output-csv data/local/r3_2_evidence_20260928/xnys_exchange_calendars.csv \
-  --output-manifest data/local/r3_2_evidence_20260928/xnys_exchange_calendars_manifest.json \
-  --start 1996-01-02 --end 2026-09-15 \
-  --retrieved-at 2026-09-28T09:00:00+00:00
-
-python -m src.cli.r3_evidence nasdaq-dividends \
-  --canonical-actions data/local/phase3_build_v3/canonical/corporate_actions.parquet \
-  --output-directory data/local/r3_2_evidence_20260928 \
-  --start 2013-01-01 --end 2026-09-15 \
-  --retrieved-at 2026-09-28T09:00:00+00:00 \
-  --curated-delistings data/local/r3_2_evidence_20260928/curated_delistings.json \
-  --spdr-distributions-xlsx data/local/r3_2_evidence_20260928/spdr-etf-historical-distributions.xlsx
-
-python -m src.cli.r3_dataset \
-  --canonical-manifest data/local/phase3_build_v3/canonical/canonical_manifest.json \
-  --dataset-evidence data/local/phase3_build_v3/dataset_evidence.json \
-  --universe-policy data/local/phase3_build_v3/universe_policy.json \
-  --calendar data/local/phase3_v2/calendar.csv \
-  --fx-csv data/local/r3_2_evidence_20260928/gbp_usd_ecb.csv \
-  --fx-manifest data/local/r3_2_evidence_20260928/gbp_usd_ecb_manifest.json \
-  --fx-source-archive data/local/phase3_v2/fx_ecb_archive.zip \
-  --cash-action-evidence data/local/r3_2_evidence_20260928/cash_action_evidence.csv \
-  --cash-action-manifest data/local/r3_2_evidence_20260928/cash_action_evidence_manifest.json \
-  --independent-calendar data/local/r3_2_evidence_20260928/xnys_exchange_calendars.csv \
-  --independent-calendar-manifest data/local/r3_2_evidence_20260928/xnys_exchange_calendars_manifest.json \
-  --curated-delisting-evidence data/local/r3_2_evidence_20260928/curated_delistings.json \
-  --spdr-distributions-evidence data/local/r3_2_evidence_20260928/spdr-etf-historical-distributions.xlsx \
-  --config config.r3.yaml \
-  --output-directory data/local/r3_2_20260928 \
-  --run-timestamp 2026-09-28T09:00:00+00:00
-```
-
-Artifact identities are: features `26de5d7251a6b4a756423983d129f2cc6cc476e00fbf9a61c3b3a03ece975ce5`; labels `bd29d570900e9bb834bdcc7c8bc98e0b2577c73d9dc2e1b22ec104f55e4a183f`; splits `c8baa44423fbc7cf750f70664fb67dc33731172ec55bd89a5faa02bb3109c612`; register file `14ead1a4cb523ca44963c54525819ffd09c24fb69694442436aa65fdd9a40d9c` with internal identity `9e8bc819b0b2bee66f74449f74da5c125bbceba33f656ae448489fb6a503ae3d`; dataset `146a66c923be4eeb0ea0af6f469d997b7ec23b6476feb4002116e8f3b3b1545b`; report `9a0cb013ef5645ef89c73fd7aa69a64e88bb1cb53d0a79a675472a6a09f7f973`; implementation tree `bd9311c58892d563171a1872d261b524d0964fa15a9f6588bed09f0cbf4e104d`. A second fixed-timestamp run reproduced all five written artifacts byte-for-byte.
-
-Verification: targeted R3 evidence/materialization tests passed; the full suite passed 399 tests; `ruff check .` and `mypy src` passed; `python -m build` produced both sdist and wheel. The isolated build required network access to install its declared Hatchling build dependency. No performance claim was evaluated.
-
-### R3.2 explicit scope-decision closure — 2026-09-28
-
-The user explicitly decided to close R3.2 and move on without cash-action completeness, verified withholding, dated primary/common-stock classification, complete delisting recovery or vintage certification. This is a governance override for development sequencing, not an evidence result. It preserves the seven reported evidence limitations, does not manufacture values for 28,606 unresolved cash-action labels, and does not change `qualification_permitted: false`.
-
-The decision is versioned in `config.r3.yaml` as `proceed_with_open_label_evidence`, dated 2026-09-28, with a note that R3.3 must not start in this change. The materializer records the original limitations separately from active development gates. The scope decision may waive the named evidence limitations, but it cannot waive the registered temporal-coverage requirement or permit outcome-conditioned deletion. Those conditions pass with nine complete 8/2/1 folds and zero cash-action rows dropped from the label artifact.
-
-The final fixed-timestamp report records:
-
-- `r3_2_phase_closed: true` with closure basis `explicit_scope_decision_with_open_label_evidence`;
-- `development_training_blockers: []` while retaining all seven entries under `evidence_limitations`;
-- `r3_3_development_training_permitted: true`, `r3_3_started: false`; and
-- `qualification_permitted: false`.
-
-The closure run used the reproduction command above with `--output-directory data/local/r3_2_20260928_closed_v2` and `--run-timestamp 2026-09-28T12:00:00+00:00`. Its physical config SHA-256 is `b72f8a2e4807c56c040fa68fa2e2d5144db8f2d2bec8450e406152a79bdcd846` and typed-config identity is `67426378b51b809612b8eb8b490935a7b756e4508caf945c87c05d8e5831aefd`. Artifact identities are: features `26de5d7251a6b4a756423983d129f2cc6cc476e00fbf9a61c3b3a03ece975ce5`; labels `bd29d570900e9bb834bdcc7c8bc98e0b2577c73d9dc2e1b22ec104f55e4a183f`; splits `c8baa44423fbc7cf750f70664fb67dc33731172ec55bd89a5faa02bb3109c612`; register file `d0df419fd04442851ee641d065eed8fc048155cf0481abbb5e1c700bd3305a31` with internal identity `9bcee477db9aa409c0cc411cb873183f4934c31ebb4c17fc01cd5d21c4e0e10d`; dataset `806e8a0daf945b44a44d491d8809ebd98e78e4d1c4dcf5b0f603ae569c9b9947`; report `fc4bbd80bb7f8317a01bf9543703c02b9bca3814c8efac8a1448c68a1c2d0a41`; implementation tree `77884a1db8edcd979c4045a191d368c3f3f5e1a9415111e103a87e66a6924385`. A second fixed-timestamp closure run reproduced all five written artifacts byte-for-byte.
-
-**R3.2 is complete under the user's explicit scope decision.** No further R3.2 task is required before development can move to R3.3. This change stops at the phase boundary: it contains no learner, model fit, simulation or R3.3 trial.
-
-Final closure verification passed: 400 tests, `ruff check .`, `mypy src` and `python -m build`; the build produced both sdist and wheel. Local documentation links and `git diff --check` also passed.
-
-## R3.3 — Train ML now alongside the control
-
-Implement ridge first, then shallow histogram gradient boosting using local CPU and a tested research dependency extra. Quarterly refits use only matured history. Run all three score families through the same monthly portfolio/account engine. Keep old V1/V2 engines and artifacts unchanged.
-
-**Exit:** reproducible training/inference and causal simulation; full six-configuration development table, cost/exposure bridge, target attainment/loss distributions and paired uplift versus R3-M. ML is not gated on deterministic profitability. If every family fails development, publish failure and stop; no new tuning round is implicit.
-
-### R3.3 implementation and failure record — 2026-09-29
-
-Implemented separately from V1/V2:
-
-- a tested `research` extra using NumPy 2.5.3 and scikit-learn 1.8.0;
-- deterministic momentum scoring, training-only standardized Ridge at alphas 1/10/100, and shallow `HistGradientBoostingRegressor` at 7/15 leaves with the registered parameters;
-- equal-date training weights, label-availability cutoffs, quarterly expanding refits, stable-ID tie breaks, model hashes and dependency manifests;
-- one shared monthly raw-share GBP simulator with next-session-open fills, whole-share sizing, capacity and complete-round-trip cost guards, fixed fees, cash reserve, causal FX, corporate actions, volatility scaling, regime control, resize band, soft control and permanently latched hard halt; and
-- all six registered trials, nine non-overlapping annual development cohorts, overlapping monthly cohorts, continuous accounts, cost/exposure bridges, target/loss distributions and paired bootstrap uplift.
-
-The fixed-timestamp run used the closed R3.2 dataset identity `806e8a0daf945b44a44d491d8809ebd98e78e4d1c4dcf5b0f603ae569c9b9947` and split SHA-256 `c8baa44423fbc7cf750f70664fb67dc33731172ec55bd89a5faa02bb3109c612`. Every date remains previously inspected development history. The seven R3.2 evidence limitations, unverified tariff/permissions/operating costs and `qualification_permitted: false` remain unchanged.
-
-Momentum was the strongest family on the nine non-overlapping annual cohorts: median all-in return 6.834991%, 4/9 strictly above 10%, 2/9 below zero, and worst account drawdown -11.327254%. It did not meet the >10% median/repeatability objective. Its continuous development account ended at £6,424.58 over the multi-year combined test sequence; that is not a one-year result or qualification evidence.
-
-No learned configuration earned promotion. Paired median annual uplift versus R3-M was -6.432424% (Ridge alpha 1), -7.976829% (alpha 10), -9.151379% (alpha 100), -7.142461% (tree 7 leaves) and -4.877372% (tree 15 leaves). Every 95% lower bound was negative, target attainment was no better and drawdown was worse. Validation selected alpha 10 and 7 leaves within their families; the selected tree-versus-Ridge median uplift was +1.669856%, but its 95% lower bound was -2.485295%, so it also failed promotion.
-
-All nine non-overlapping Ridge and momentum accounts were executable under the development assumptions. Both tree trials retained an invalid annual account because a split generated an unsupported fractional residual. Some overlapping alpha-10/alpha-100 cohorts also failed on the known 2015-03-24 missing held valuation. Those failures remain in the report; no price, cash-in-lieu or recovery was fabricated. Consequently `r3_3_research_accepted: false`.
-
-Reproduction (outputs remain ignored):
-
-```bash
-python -m src.cli.r3_development \
-  --r3-dataset data/local/r3_2_20260928_closed_v2 \
-  --canonical-manifest data/local/phase3_build_v3/canonical/canonical_manifest.json \
-  --calendar data/local/phase3_v2/calendar.csv \
-  --fx-csv data/local/r3_2_evidence_20260928/gbp_usd_ecb.csv \
-  --fx-manifest data/local/r3_2_evidence_20260928/gbp_usd_ecb_manifest.json \
-  --cash-action-evidence data/local/r3_2_evidence_20260928/cash_action_evidence.csv \
-  --cash-action-manifest data/local/r3_2_evidence_20260928/cash_action_evidence_manifest.json \
-  --config config.r3.yaml \
-  --development-config config.r3-development.yaml \
-  --output-directory data/local/r3_3_20260929 \
-  --run-timestamp 2026-09-29T09:00:00+00:00
-```
-
-Top-level artifact SHA-256 values are: development report `01f80f4357205733a9fe6f2ac92aeff6b3e231ef68c51b93ccce6f7cc379957c`; completed experiment register `66bb3bb9dfb3d43c886d43545719b25bbd7c43a9128776776d318cfc398c350f`; and 541-entry model manifest `b83288126534369ee0f6b6d1ec4c1f98c2e60b5f701e0030f5c6dacf9e36c65b`. A second fixed-timestamp run reproduced all three top-level artifacts and every referenced model file byte-for-byte. The report binds implementation tree `33fae3039f7f344b19d3755104229d2c270e54eaa856cb2ed94d84abdf63aa0b`, Python 3.12.14, seed 20260926 and the dependency versions.
-
-Targeted R3 tests passed, followed by 410 full-suite tests. `ruff check .` and strict `mypy src` passed. The isolated package build produced both the sdist and wheel; it required network access to install the declared Hatchling build dependency. Local documentation links, secret-pattern review and `git diff --check` passed.
-
-R3.3 implementation acceptance passes, but research acceptance fails. Per the predeclared stop rule there is no implicit tuning round and R3.4 is not permitted. The next actionable task is a review-only closure decision: preserve the failed register and decide whether to stop active research or explicitly register a materially new research question. It must not reinterpret these results, select a sensitivity neighbor or access a purported fresh holdout.
-
-## Post-R3.3 research direction — 2026-10-02
-
-The user requested a reusable record of the strategy review and guidelines for a subsequent development prompt. [Next research cycle](NEXT_RESEARCH_CYCLE.md) captures the proposed sequence: repair future-label-dependent scoring eligibility, re-establish corrected controls and exposure/cost attribution, audit point-in-time external data, then register a bounded richer-feature Ridge/XGBoost comparison. A slower prediction/holding horizon is a separate optional experiment.
-
-The scoring issue was identified by code inspection; its numerical impact is unmeasured. This qualification accompanies the historical R3.3 implementation-acceptance record above. Original artifacts remain unchanged. This documentation step does not start implementation, reopen the six-trial budget, satisfy research acceptance, or permit R3.4. A subsequent development request should begin with the correction and explicitly register new research before model selection.
-
-### Evaluation repair completed — 2026-10-02
-
-Step 1 of the next research cycle is implemented. A versioned `scoring.parquet` artifact now derives fold/date/security scoring eligibility exclusively from usable contemporaneous feature rows; the existing split artifact remains restricted to matured, availability-safe and interval-purged supervised labels. The R3 development loader requires the corrected v2 contract and hash-binds both artifacts. Scoring, fitting and simulation pass distinct eligibility/prediction inputs, so unresolved future labels remain scoreable, missing model output blocks new model risk without creating an exit, genuine ineligibility can require an exit, and unresolved held valuation continues to fail closed.
-
-Synthetic regression and bounded scoring-to-order integration checks passed. The focused set passed 23 tests; the full suite passed 416 tests; `ruff check .`, `mypy src` and the package build passed. No historical artifact or experiment record was overwritten, and the complete six-candidate comparison was not run. The correction demonstrates evaluator behavior only, not the return objective. Remaining limitations include the recorded point-in-time data/action/tariff gaps and the absence of a corrected real-data attribution run.
-
-At the step 1 checkpoint, the next action was to create a new immutable corrected dataset/run identity and execute step 2's complete controls once. That action is recorded below; the restriction against richer features, XGBoost and policy changes remains in force.
-
-### Corrected controls completed — 2026-10-02
-
-Step 2 of [the next research cycle](NEXT_RESEARCH_CYCLE.md) is complete. Dataset `data/local/r3_2_20261002_corrected_v2` has identity `bc01ebab574bb847d46781b090b01cd58c6757e3ed3b2ef99d39f052f209259a` and scoring SHA-256 `8f74da29f3b94e45ab92931a6e77b328ff758b3a52561a86f802851311e9f997`. Its 121,291 usable feature rows reconcile to 91,546 matured and 29,745 unresolved labels. Scoring assignments are label-independent, the nine registered folds pass actual-interval/31-session purging and same-date grouping, and a fixed-timestamp repeat reproduced every dataset artifact byte-for-byte.
-
-The complete six-control comparison ran once in `data/local/r3_3_20261002_corrected_v2`. Overall annual target attainment was 3/9 Momentum, 0/9 Ridge 1, 0/9 Ridge 10, 3/9 Ridge 100, 2/9 HGB 7 and 1/9 HGB 15. Valid annual-account medians were respectively -1.975435%, 0.264122%, 6.770086%, 7.458705%, 5.394361% and 0.291698%; these survivor medians are not overall attainment rates. Valid annual accounts were 8, 7, 7, 6, 6 and 5 of nine. No candidate supports advancement or ML promotion.
-
-All validation, non-overlapping annual, overlapping monthly and continuous attempts remain in the report with their start date and failure. The correction exposed unresolved held-delisting recoveries, missing held valuations/opens and fractional split residuals that the old label-filtered scoring universe could avoid. Gross-to-net costs, turnover, mandatory fills, exposure, idle cash, halt time, skip reasons and unresolved accruals are explicit. Source/config/dependency hashes match preserved R3.3; features, labels and splits are byte-identical, while the corrected test scoring universe contains 10,087 additional security-date rows. The preserved report lacks per-account scores, selections, mandatory fills and account identifiers, so exact old-side selection pairing is unavailable without rerunning rejected evidence; no such rerun occurred.
-
-Artifact SHA-256 values are report `2f3a4f6035b915203eed5ecc1cc6a4a5d5b6129010a932f42d86791c291b0dba`, completed register `a343096d9ed3f46d6db1e361721f3aadc39d67524a5191b13b83794872fb1bee` and 541-entry model manifest `0aa01c3c497e01d35f5623895a5b6d0b6709474f8de5e5f403d11437dc6824d9`; all referenced model hashes validate. All 544 original R3.3 hashes remain unchanged. The complete numerical record and limitations are in [the step 2 record](NEXT_RESEARCH_CYCLE.md#step-2-corrected-control-record--2026-10-02).
-
-The corrected run remains inspected development evidence and does not demonstrate the objective, qualify a strategy or authorize deployment. Step 3 was subsequently authorized and completed with the source-feasibility stop recorded at the top of this roadmap. Richer features, XGBoost, portfolio-policy changes and another model experiment remain unauthorized.
-
-## R3.4 — Review, freeze and evaluate unseen observations
-
-Review the code, data and complete trial ledger. Run all registered stresses, ablations and eight sensitivity neighbors, with every failure retained. Freeze the chosen recipe only if development supports it. Register an untouched test and its endpoints. No inspected 2021–2026 period is a fresh R3 holdout; earlier inspected training periods are not fresh either.
-
-**Exit:** all BACKTEST_AND_VALIDATION gates, including the first fixed 12-month result, retained minimum 756 fresh sessions, trade/episode minima and uncertainty checks. New forward evidence may take years. No claim that a few weeks of coding or one year of monitoring can complete the full qualification contract. Failure/inconclusive evidence blocks advancement.
-
-## R3.5 — Paper execution only after qualification
-
-Implement reconciliation and durable idempotent intents before any order transport. Test partial fills, rejects, timeout/restart, stale prices, action handling, settlement/cash, kill switch and independent risk controls. Run >=60 trading sessions in paper mode, with no unexplained differences between target, order, fill and portfolio.
-
-**Exit:** operational gate passed and separately documented authorization for any live step. Paper performance is not proof of the one-year objective.
-
-## R3.6 — Explicitly authorized small-capital live evaluation
-
-Deploy with initial £3,000 only after that account scenario qualifies and the user gives exact live-order authorization. Preserve every invariant and audit every fill. Measure the actual first-year net outcome without counting deposits as profit. A missed target is reported as failure; no automatic restart after a halt or increase in capital to repair performance. Consider increases only after >=6 months of operational stability and review.
-
-## Deliverable discipline
-
-Each implementation change must state its stage, edit only the required modules/config/tests, run targeted then broader checks, and publish evidence plus unresolved limits. Generated reports/models stay ignored; update a short tracked decision record with hashes. No subscriptions, scheduled tasks, background monitoring, broker integration or model training are started by this documentation revision.
-
-R3.3 reached its stop condition. R3.4, broker integration and execution remain out of scope and unauthorized. Any further strategy work requires an explicit new registration and scope decision; no automatic tuning or sensitivity search is permitted.
+The superseded roadmap and cycle narratives were consolidated on 2026-10-10; their pre-edit working copies are preserved locally in `data/local/r3_iteration_docs_before_20261010`. Old source/run artifacts were not modified or re-signed.

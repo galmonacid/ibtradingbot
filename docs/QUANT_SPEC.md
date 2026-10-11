@@ -2,11 +2,11 @@
 
 Status: R3.3 implements the registered six-candidate scoring, quarterly fitting and common development simulator. The fixed experiment failed: momentum did not support the one-year objective and every learned configuration failed paired promotion. Existing V1/V2 code/configurations remain frozen research controls; no R3 candidate is qualified or permitted to advance.
 
-## Objective and candidate set
+## Current diagnostic and preserved account candidate set
 
 Primary product outcome: GBP terminal wealth after 12 calendar months >£3,300 from an initial £3,000, net of costs (net profit >£300; return >10%). £3,000 is the sole required starting-capital scenario. Validation also assesses the frequency and uncertainty of that outcome across historical entry dates. A prediction score, CAGR or profitable month is not the objective.
 
-Register exactly these candidate families on identical inputs and portfolio rules:
+The current separate diagnostic compares momentum, Ridge and XGBoost as specified in [NEXT_RESEARCH_CYCLE.md](NEXT_RESEARCH_CYCLE.md). It does not change the account policy below. The table and hyperparameter budget below describe the preserved R3.3 momentum/Ridge/HGB experiment, not a restriction on the newly authorized cycle:
 
 | Candidate | Score | Role |
 | --- | --- | --- |

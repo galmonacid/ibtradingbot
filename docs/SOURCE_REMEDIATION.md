@@ -1,5 +1,7 @@
 # Public-source remediation after Step 3
 
+Historical source-work record. Current authorization and completed momentum/Ridge/XGBoost diagnostics are in [the roadmap](ROADMAP.md) and [current cycle](NEXT_RESEARCH_CYCLE.md). Earlier Step 4 readiness statements below do not block conditional offline experiments.
+
 Date: 2026-10-04. Stage: **bounded identity/source remediation implemented and audited; full remediation incomplete; Step 4 not ready**.
 
 The user's request to continue the next steps authorizes this bounded public-source follow-up to the completed Step 3 audit. It does not change historical results, date windows, source/feature admission rules or risk limits. See [the next research cycle](NEXT_RESEARCH_CYCLE.md) and [roadmap](ROADMAP.md).

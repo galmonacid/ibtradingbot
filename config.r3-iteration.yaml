@@ -1,0 +1,23 @@
+contract: r3-iteration-ranking-v1
+dataset: data/local/r3_2_20261002_corrected_v2
+dataset_report_sha256: aff78c486855a629bcfc6dfffe4a720612f5b535fc5f3fd08e2324a50268c8e6
+calendar: data/local/phase3_v2/calendar.csv
+calendar_sha256: 942db7fb86a85cf0c7f50a220eee39fca3fde2d5d5ce2775cb133f43d7f3ce8e
+start: '2010-01-01'
+complete_through: '2026-09-15'
+seed: 20261010
+top_k: 5
+ridge_alpha: 10.0
+xgboost:
+  n_estimators: 100
+  max_depth: 3
+  learning_rate: 0.05
+  min_child_weight: 100.0
+  reg_lambda: 10.0
+  reg_alpha: 0.0
+  subsample: 1.0
+  colsample_bytree: 1.0
+# Illustrative monthly excess-return assumptions, NOT evidenced error bounds.
+missing_excess_scenarios: [-0.10, 0.0, 0.10]
+# Extra monthly drag versus momentum; diagnostics, NOT account cost estimates.
+incremental_drag_bps: [0.0, 25.0, 50.0]
